@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autonomous Tech Startup Discovery & Outreach Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo-container">
+                <div class="logo-icon">⚡</div>
+                <div class="logo-text">
+                    <h2>AutoOutreach</h2>
+                    <span class="badge">AI Engine v1.0</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="discover">
+                    <span class="icon">🔍</span>
+                    <span>Discover Startups</span>
+                </button>
+                <button class="nav-item" data-tab="role-search">
+                    <span class="icon">🎯</span>
+                    <span>Role Search & Fit</span>
+                </button>
+                <button class="nav-item" data-tab="autofill">
+                    <span class="icon">⚡</span>
+                    <span>Career Site Autofill</span>
+                </button>
+                <button class="nav-item" data-tab="pending">
+                    <span class="icon">✋</span>
+                    <span>HITL Approval Queue</span>
+                    <span class="counter-badge" id="pending-count">0</span>
+                </button>
+                <button class="nav-item" data-tab="history">
+                    <span class="icon">📊</span>
+                    <span>Outreach History</span>
+                </button>
+            </nav>
+
+            <div class="system-status">
+                <div class="status-indicator online"></div>
+                <div class="status-info">
+                    <span class="status-title">LangGraph Backend</span>
+                    <span class="status-sub">FastAPI • localhost:8000</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="top-header">
+                <div class="header-title">
+                    <h1 id="page-title">Global Tech Startup Discovery</h1>
+                    <p id="page-subtitle">Autonomous multi-region search & $0 credit deduplication pipeline</p>
+                </div>
+                <div class="header-actions" style="display:flex; gap:10px;">
+                    <button class="btn" id="btn-nightly-scan" style="background:rgba(147,51,234,0.2); color:#c084fc; border:1px solid rgba(147,51,234,0.4); padding:10px 16px; border-radius:10px; font-weight:600; cursor:pointer;">
+                        <span class="btn-icon">🌙</span>
+                        <span>Nightly Scan</span>
+                    </button>
+                    <button class="btn btn-primary" id="btn-discover">
+                        <span class="btn-icon">🚀</span>
+                        <span>Discover Fresh Startups</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Metrics Bar -->
+            <section class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-icon cyan">🌐</div>
+                    <div class="metric-data">
+                        <span class="metric-value" id="metric-discovered">0</span>
+                        <span class="metric-label">Startups Found</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon purple">✋</div>
+                    <div class="metric-data">
+                        <span class="metric-value" id="metric-pending">0</span>
+                        <span class="metric-label">Pending Approval</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon green">⚡</div>
+                    <div class="metric-data">
+                        <span class="metric-value" id="metric-saved">100%</span>
+                        <span class="metric-label">$0 Credit Cache</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon orange">🎯</div>
+                    <div class="metric-data">
+                        <span class="metric-value" id="metric-sent">0</span>
+                        <span class="metric-label">Approved & Sent</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View 1: Discover Startups Grid -->
+            <section class="tab-view active" id="view-discover">
+                <div class="section-header">
+                    <h3>Discovered Tech Startups (US / EU / Asia)</h3>
+                    <div class="quick-input">
+                        <input type="text" id="manual-domain-input" placeholder="Or enter company domain (e.g. acme.ai)...">
+                        <button class="btn btn-secondary" id="btn-manual-outreach">Run Outreach</button>
+                    </div>
+                </div>
+
+                <div class="region-tabs" style="display:flex; gap:10px; margin-bottom:16px;">
+                    <button class="region-tab active" data-region="us_yc" style="background:rgba(0,240,255,0.15); color:var(--primary-cyan); border:1px solid rgba(0,240,255,0.3); padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer;">🇺🇸 US & YC Startups</button>
+                    <button class="region-tab" data-region="eu" style="background:rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1); padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer;">🇪🇺 Europe Tech Scaleups</button>
+                    <button class="region-tab" data-region="asia_me" style="background:rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1); padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer;">🌏 Asia & Dubai Hubs</button>
+                </div>
+
+                <div class="startups-grid" id="startups-container">
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <h3>No Startups Discovered Yet</h3>
+                        <p>Click "Discover Fresh Startups" above to search YC, US, EU, and Asia AI startups autonomously.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View 2: Desired Role Search & Fit Scoring -->
+            <section class="tab-view" id="view-role-search">
+                <div class="section-header">
+                    <h3>Desired Role Search & Fit Match Scoring</h3>
+                    <p class="section-desc">Search active job postings for target roles (AI/ML Engineer, C++ SDE, Backend) across Greenhouse, Lever, and Ashby with AI match scoring.</p>
+                    <div class="quick-input" style="margin-top:12px; display:flex; gap:10px;">
+                        <input type="text" id="role-search-input" placeholder="Enter target role (e.g. AI Engineer, C++ SDE)..." style="flex:1; padding:12px 16px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#fff;">
+                        <button class="btn btn-primary" id="btn-run-role-search">Search Role Postings</button>
+                    </div>
+                </div>
+
+                <div class="role-jobs-grid" id="role-jobs-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px; margin-top:20px;">
+                    <div class="empty-state">
+                        <div class="empty-icon">🎯</div>
+                        <h3>Search Desired Roles</h3>
+                        <p>Type any role above (e.g. "AI Engineer") to search active ATS job postings and view match fit scores.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View 3: Career Site 1-Click Form Auto-Filler -->
+            <section class="tab-view" id="view-autofill">
+                <div class="section-header">
+                    <h3>⚡ 1-Click Career Site Form Auto-Filler</h3>
+                    <p class="section-desc">Paste any Greenhouse, Lever, or Ashby job application URL to pre-fill candidate details and generate custom AI essay responses.</p>
+                </div>
+
+                <!-- PDF Resume Upload Card -->
+                <div class="resume-upload-card" style="background:rgba(181, 124, 255, 0.05); border:1px dashed rgba(181, 124, 255, 0.4); border-radius:14px; padding:20px; margin-top:20px; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                        <div>
+                            <h4 style="color:#b57cff; margin:0 0 4px 0; font-size:16px;">📄 Upload Candidate Resume PDF</h4>
+                            <p style="color:var(--text-muted); margin:0; font-size:13px;">Upload your latest PDF resume. Groq AI will parse your skills, C++ projects, and contact info into your candidate profile.</p>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <input type="file" id="resume-pdf-input" accept=".pdf" style="display:none;" onchange="uploadResumePDF(this)">
+                            <button class="btn" style="background:rgba(181, 124, 255, 0.2); color:#b57cff; border:1px solid rgba(181, 124, 255, 0.5); padding:10px 18px; border-radius:10px; font-weight:600; cursor:pointer;" onclick="document.getElementById('resume-pdf-input').click()">
+                                <span>📤 Upload Resume PDF</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="resume-upload-status" style="margin-top:12px; display:none; padding:10px 14px; border-radius:8px; font-size:13px;"></div>
+                </div>
+
+                <div class="autofill-card" style="background:rgba(255,255,255,0.03); border:1px solid rgba(0,240,255,0.2); border-radius:14px; padding:24px;">
+                    <label style="font-weight:600; font-size:15px; color:#fff; display:block; margin-bottom:8px;">Job Application URL (Greenhouse / Lever / Ashby)</label>
+                    <div style="display:flex; gap:12px;">
+                        <input type="text" id="autofill-url-input" placeholder="https://boards.greenhouse.io/company/jobs/12345..." style="flex:1; padding:14px 18px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.15); border-radius:10px; color:#fff; font-size:14px;">
+                        <button class="btn btn-primary" id="btn-run-autofill" style="padding:14px 24px;">⚡ Pre-Fill Application Form</button>
+                    </div>
+
+                    <div id="autofill-status-box" style="margin-top:20px; display:none; padding:16px; border-radius:10px; background:rgba(0,240,255,0.08); border:1px solid rgba(0,240,255,0.3);">
+                        <h4 id="autofill-status-title" style="color:var(--primary-cyan); margin:0 0 6px 0;">Processing Application URL...</h4>
+                        <p id="autofill-status-desc" style="color:var(--text-muted); margin:0; font-size:13px;"></p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View 4: Pending Approval Queue -->
+            <section class="tab-view" id="view-pending">
+                <div class="section-header">
+                    <h3>Human-In-The-Loop (HITL) Review Queue</h3>
+                    <p class="section-desc">Review and approve tailored cold emails generated for CTOs, CEOs, and HR leaders before sending.</p>
+                </div>
+
+                <div class="pending-list" id="pending-container">
+                    <div class="empty-state">
+                        <div class="empty-icon">✅</div>
+                        <h3>No Pending Approvals</h3>
+                        <p>Your outreach queue is clear! Discover startups to generate new tailored emails.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View 3: Outreach History -->
+            <section class="tab-view" id="view-history">
+                <div class="section-header">
+                    <h3>Outreach History & Cache Log</h3>
+                </div>
+                <div class="history-table-wrapper">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Company</th>
+                                <th>Target Contact</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
+                            <!-- Rows loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Review Draft Modal -->
+    <div class="modal-backdrop" id="review-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3 id="modal-company-name">Company Pitch Review</h3>
+                    <span class="badge" id="modal-role-target">CTO Pitch</span>
+                </div>
+                <button class="modal-close" id="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="info-group">
+                    <label>Recipient Email & Contact</label>
+                    <input type="text" id="modal-contact-info" readonly class="input-readonly">
+                </div>
+                <div class="info-group">
+                    <label>Subject Line</label>
+                    <input type="text" id="modal-subject-input">
+                </div>
+                <div class="info-group">
+                    <label>Personalized Pitch Body</label>
+                    <textarea id="modal-body-input" rows="10"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" style="background:rgba(255,68,68,0.15); color:#ff4444; border:1px solid rgba(255,68,68,0.3); border-radius:8px; padding:10px 16px; cursor:pointer;" id="modal-delete-btn">🗑️ Delete</button>
+                <button class="btn btn-danger" id="modal-reject-btn">Reject Pitch</button>
+                <a href="#" target="_blank" class="btn btn-primary" id="modal-approve-gmail-btn">
+                    <span>✉️ Open in Gmail Compose & Approve</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

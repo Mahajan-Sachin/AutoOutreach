@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AutoOutreach Copilot</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <div class="header">
+      <div class="logo">⚡ AutoOutreach AI</div>
+      <span class="badge" id="mode-badge">Detecting...</span>
+    </div>
+
+    <div class="target-card">
+      <div class="field-group" id="person-fields">
+        <div class="label">Target Decision Maker</div>
+        <input type="text" class="input-field" id="person-name" placeholder="Full Name (e.g. John Doe)">
+        <input type="text" class="input-field" id="person-title" placeholder="Title (e.g. Co-Founder / CTO)">
+      </div>
+
+      <div class="field-group">
+        <div class="label">Company Name & Domain</div>
+        <input type="text" class="input-field" id="company-name" placeholder="Company Name">
+        <input type="text" class="input-field" id="company-domain" placeholder="Domain (e.g. acme.com)">
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-run-outreach">
+        ⚡ Generate Outreach Pitch
+      </button>
+      <a href="http://localhost:8000" target="_blank" class="btn btn-secondary">
+        🌐 Open Dashboard
+      </a>
+    </div>
+
+    <div class="status-box" id="status-box">
+      Ready to analyze target and generate 1-click tailored email pitch.
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
