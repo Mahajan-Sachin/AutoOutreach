@@ -98,114 +98,101 @@ def discover_startups_by_region() -> Dict[str, List[Dict[str, Any]]]:
         except Exception as e:
             print(f"[Tools] DDG US search error: {e}")
 
-    # Curated Early-Stage US & YC Startup Pool
-    us_pool = [
-        {"name": "Phidata", "domain": "phidata.com", "url": "https://phidata.com", "snippet": "Open-source framework for building multi-modal AI agents with memory.", "careers_url": "https://phidata.com/careers"},
-        {"name": "LlamaIndex", "domain": "llamaindex.ai", "url": "https://llamaindex.ai", "snippet": "Data framework for building LLM applications over enterprise data.", "careers_url": "https://llamaindex.ai/careers"},
-        {"name": "Vapi AI", "domain": "vapi.ai", "url": "https://vapi.ai", "snippet": "Voice AI infrastructure for developers building conversational voice agents.", "careers_url": "https://vapi.ai/careers"},
-        {"name": "CrewAI", "domain": "crewai.com", "url": "https://crewai.com", "snippet": "Multi-agent automation platform for engineering and operations.", "careers_url": "https://crewai.com/careers"},
-        {"name": "Cursor AI", "domain": "cursor.com", "url": "https://cursor.com", "snippet": "AI-first Code Editor built for software engineers.", "careers_url": "https://cursor.com/careers"},
-        {"name": "Perplexity AI", "domain": "perplexity.ai", "url": "https://perplexity.ai", "snippet": "Conversational AI search engine revolutionizing information discovery.", "careers_url": "https://perplexity.ai/careers"}
-    ]
-    for p in us_pool:
-        if len(results["us_yc"]) >= TARGET_COUNT:
-            break
-        if p["domain"] not in seen_domains:
-            seen_domains.add(p["domain"])
-            results["us_yc"].append({
-                **p,
-                "source": "Curated US Early-Stage Pool",
-                "region": "US & YC",
-                "linkedin_url": f"https://www.linkedin.com/company/{p['domain'].split('.')[0]}"
-            })
+    # --- 2. Europe Region (Early-Stage / YC / Series A) ---
+    eu_query = "European AI tech startups hiring engineers London Berlin Paris"
+    if TAVILY_API_KEY and len(results["eu"]) < TARGET_COUNT:
+        try:
+            from tavily import TavilyClient
+            client = TavilyClient(api_key=TAVILY_API_KEY)
+            t_res = client.search(query=eu_query, max_results=6)
+            for res in t_res.get("results", []):
+                url = res.get("url", "")
+                domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
+                if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
+                    seen_domains.add(domain)
+                    name = res.get("title", domain).split("-")[0].split("|")[0].strip()
+                    results["eu"].append({
+                        "name": name,
+                        "domain": domain,
+                        "url": url,
+                        "snippet": res.get("content", "")[:180],
+                        "source": "Tavily API",
+                        "region": "Europe",
+                        "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
+                        "careers_url": f"https://{domain}/careers"
+                    })
+        except Exception as e:
+            print(f"[Tools] Tavily EU search error: {e}")
 
-    # --- 2. Europe Region (Early-Stage / YC / Series A - 100% Free) ---
-    try:
-        ddgs = DDGS()
-        ddg_res = list(ddgs.text("European AI tech startups hiring engineers London Berlin Paris", max_results=6))
-        for r in ddg_res:
-            url = r.get("href", "")
-            domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
-            if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
-                seen_domains.add(domain)
-                name = r.get("title", domain).split("-")[0].split("|")[0].strip()
-                results["eu"].append({
-                    "name": name,
-                    "domain": domain,
-                    "url": url,
-                    "snippet": r.get("body", "")[:180],
-                    "source": "DuckDuckGo EU",
-                    "region": "Europe",
-                    "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
-                    "careers_url": f"https://{domain}/careers"
-                })
-    except Exception as e:
-        print(f"[Tools] DDG EU search error: {e}")
+    if len(results["eu"]) < TARGET_COUNT:
+        try:
+            ddgs = DDGS()
+            for r in ddgs.text(eu_query, max_results=6):
+                url = r.get("href", "")
+                domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
+                if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
+                    seen_domains.add(domain)
+                    name = r.get("title", domain).split("-")[0].split("|")[0].strip()
+                    results["eu"].append({
+                        "name": name,
+                        "domain": domain,
+                        "url": url,
+                        "snippet": r.get("body", "")[:180],
+                        "source": "DuckDuckGo EU",
+                        "region": "Europe",
+                        "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
+                        "careers_url": f"https://{domain}/careers"
+                    })
+        except Exception as e:
+            print(f"[Tools] DDG EU search error: {e}")
 
-    # Curated Early-Stage Europe Startup Pool
-    eu_pool = [
-        {"name": "Dust AI", "domain": "dust.tt", "url": "https://dust.tt", "snippet": "Paris-based AI platform building custom assistant tools for tech teams.", "careers_url": "https://dust.tt/careers"},
-        {"name": "Poolside AI", "domain": "poolside.ai", "url": "https://poolside.ai", "snippet": "Paris-based AI lab developing frontier models specifically for software creation.", "careers_url": "https://poolside.ai/careers"},
-        {"name": "Braintrust AI", "domain": "braintrust.dev", "url": "https://braintrust.dev", "snippet": "AI evaluation and observability platform for production AI software.", "careers_url": "https://braintrust.dev/careers"},
-        {"name": "Lovable", "domain": "lovable.dev", "url": "https://lovable.dev", "snippet": "Stockholm-based AI web application creator shipping full-stack apps.", "careers_url": "https://lovable.dev/careers"},
-        {"name": "Mistral AI", "domain": "mistral.ai", "url": "https://mistral.ai", "snippet": "Paris-based open-weights AI model research lab.", "careers_url": "https://mistral.ai/careers"},
-        {"name": "Synthesia", "domain": "synthesia.io", "url": "https://synthesia.io", "snippet": "London-based AI video generation platform backed by top VCs.", "careers_url": "https://synthesia.io/careers"}
-    ]
-    for p in eu_pool:
-        if len(results["eu"]) >= TARGET_COUNT:
-            break
-        if p["domain"] not in seen_domains:
-            seen_domains.add(p["domain"])
-            results["eu"].append({
-                **p,
-                "source": "Curated EU Early-Stage Pool",
-                "region": "Europe",
-                "linkedin_url": f"https://www.linkedin.com/company/{p['domain'].split('.')[0]}"
-            })
+    # --- 3. Asia & Middle East Region (Early-Stage / YC / Series A) ---
+    asia_query = "early stage AI tech startups Singapore Dubai hiring software engineers"
+    if TAVILY_API_KEY and len(results["asia_me"]) < TARGET_COUNT:
+        try:
+            from tavily import TavilyClient
+            client = TavilyClient(api_key=TAVILY_API_KEY)
+            t_res = client.search(query=asia_query, max_results=6)
+            for res in t_res.get("results", []):
+                url = res.get("url", "")
+                domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
+                if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
+                    seen_domains.add(domain)
+                    name = res.get("title", domain).split("-")[0].split("|")[0].strip()
+                    results["asia_me"].append({
+                        "name": name,
+                        "domain": domain,
+                        "url": url,
+                        "snippet": res.get("content", "")[:180],
+                        "source": "Tavily API",
+                        "region": "Asia & Dubai",
+                        "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
+                        "careers_url": f"https://{domain}/careers"
+                    })
+        except Exception as e:
+            print(f"[Tools] Tavily Asia search error: {e}")
 
-    # --- 3. Asia & Middle East Region (Early-Stage / YC / Series A - 100% Free) ---
-    try:
-        ddgs = DDGS()
-        ddg_res = list(ddgs.text("early stage AI tech startups Singapore Dubai hiring software engineers", max_results=6))
-        for r in ddg_res:
-            url = r.get("href", "")
-            domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
-            if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
-                seen_domains.add(domain)
-                name = r.get("title", domain).split("-")[0].split("|")[0].strip()
-                results["asia_me"].append({
-                    "name": name,
-                    "domain": domain,
-                    "url": url,
-                    "snippet": r.get("body", "")[:180],
-                    "source": "DuckDuckGo Asia/ME",
-                    "region": "Asia & Dubai",
-                    "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
-                    "careers_url": f"https://{domain}/careers"
-                })
-    except Exception as e:
-        print(f"[Tools] DDG Asia search error: {e}")
-
-    # Curated Early-Stage Asia & Dubai Pool
-    asia_pool = [
-        {"name": "AI71", "domain": "ai71.ai", "url": "https://ai71.ai", "snippet": "Abu Dhabi & Dubai AI ecosystem commercializing Falcon foundation models.", "careers_url": "https://ai71.ai/careers"},
-        {"name": "Kinetix AI", "domain": "kinetix.tech", "url": "https://kinetix.tech", "snippet": "Dubai AI startup creating generative 3D animation tools for tech platforms.", "careers_url": "https://kinetix.tech/careers"},
-        {"name": "Hypotenuse AI", "domain": "hypotenuse.ai", "url": "https://hypotenuse.ai", "snippet": "Singapore generative AI writing and data intelligence platform.", "careers_url": "https://hypotenuse.ai/careers"},
-        {"name": "Subconscious AI", "domain": "subconscious.ai", "url": "https://subconscious.ai", "snippet": "Singapore AI agent decision engine simulating human preference models.", "careers_url": "https://subconscious.ai/careers"},
-        {"name": "Carro AI", "domain": "carro.co", "url": "https://carro.co", "snippet": "Singapore AI automotive marketplace scaleup.", "careers_url": "https://carro.co/careers"},
-        {"name": "Sakana AI", "domain": "sakana.ai", "url": "https://sakana.ai", "snippet": "Tokyo AI research lab pioneering evolutionary foundation models.", "careers_url": "https://sakana.ai/careers"}
-    ]
-    for p in asia_pool:
-        if len(results["asia_me"]) >= TARGET_COUNT:
-            break
-        if p["domain"] not in seen_domains:
-            seen_domains.add(p["domain"])
-            results["asia_me"].append({
-                **p,
-                "source": "Curated Asia/Dubai Early-Stage Pool",
-                "region": "Asia & Dubai",
-                "linkedin_url": f"https://www.linkedin.com/company/{p['domain'].split('.')[0]}"
-            })
+    if len(results["asia_me"]) < TARGET_COUNT:
+        try:
+            ddgs = DDGS()
+            for r in ddgs.text(asia_query, max_results=6):
+                url = r.get("href", "")
+                domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
+                if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
+                    seen_domains.add(domain)
+                    name = r.get("title", domain).split("-")[0].split("|")[0].strip()
+                    results["asia_me"].append({
+                        "name": name,
+                        "domain": domain,
+                        "url": url,
+                        "snippet": r.get("body", "")[:180],
+                        "source": "DuckDuckGo Asia/ME",
+                        "region": "Asia & Dubai",
+                        "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
+                        "careers_url": f"https://{domain}/careers"
+                    })
+        except Exception as e:
+            print(f"[Tools] DDG Asia search error: {e}")
 
     return results
 
