@@ -38,10 +38,20 @@ class OutreachState(TypedDict):
     pitches: List[Dict[str, Any]]
     status: str
 
+from pydantic import BaseModel, Field
+
+class PitchItem(BaseModel):
+    role_target: str = Field(description="Target role category: 'CTO', 'CEO', or 'HR'")
+    pitch_subject: str = Field(description="Impactful cold email subject line")
+    pitch_body: str = Field(description="Exact 5-bullet personalized outreach pitch body")
+
+class PitchResponse(BaseModel):
+    pitches: List[PitchItem] = Field(description="List of 3 customized pitches tailored for CTO, CEO, and HR")
+
 # Initialize Groq LLM
 llm = ChatGroq(
     groq_api_key=GROQ_API_KEY if GROQ_API_KEY else "dummy_key",
-    model_name="qwen/qwen3.8-27b",
+    model_name="llama-3.3-70b-versatile",
     temperature=0.3
 )
 
@@ -121,34 +131,20 @@ def role_specific_pitch_generator_node(state: OutreachState) -> OutreachState:
        - Bullet 5: Punchy zero-risk trial ask ("• So: don't believe the resume. Give me an assignment, see my work, then decide.")
     3. Do NOT use fancy AI fluff, robotic buzzwords, or corporate filler. Keep it direct, polite, and confident.
 
-    Return ONLY a JSON list of 3 items matching this structure:
-    [
-        {{
-            "role_target": "CTO",
-            "pitch_subject": "Merged code in Google's TensorFlow & Red Hat's Podman",
-            "pitch_body": "Hi {first_name},\\n\\n• B.Tech CSE student focused on AI/ML and production systems.\\n• Merged PRs in Google's TensorFlow, Red Hat's Podman, and pandas. Shipped production LLM applications.\\n• Saw your engineering work at {company_name} — think there's real overlap with what I'm building.\\n• Resume attached below — feel free to share with your team so they know what to test me on.\\n• So: don't believe the resume. Give me an assignment, see my work, then decide."
-        }},
-        {{
-            "role_target": "CEO",
-            "pitch_subject": "Quick 15-second note: AI/ML Engineering & OSS proof of work",
-            "pitch_body": "Hi {first_name},\\n\\n• B.Tech CSE student focused on AI/ML and production systems.\\n• Merged PRs in Google's TensorFlow, Red Hat's Podman, and pandas. Shipped production LLM applications.\\n• Saw {company_name}'s product progress — think I can add immediate value on shipping fast.\\n• Resume attached below — feel free to share with your tech team so they know what to ask for.\\n• So: don't believe the resume. Give me an assignment or trial sprint, see my work, then decide."
-        }},
-        {{
-            "role_target": "HR",
-            "pitch_subject": "AI/ML Engineer Intern — Google TensorFlow & Podman Contributor",
-            "pitch_body": "Hi {first_name},\\n\\n• B.Tech CSE student focused on AI/ML and production systems.\\n• Merged PRs in Google's TensorFlow, Red Hat's Podman, and pandas. Shipped production LLM applications.\\n• Saw {company_name} is hiring engineering talent — think my background aligns closely with your tech stack.\\n• Resume attached below — feel free to pass to your engineering leads.\\n• So: happy to take on a technical trial task or coding assignment first before any formal loop."
-        }}
-    ]
+    Generate 3 distinct pitches tailored respectively for CTO (technical depth), CEO (velocity/execution), and HR (role fit).
     """
     
     try:
-        response = llm.invoke(prompt)
-        content = response.content.strip()
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        pitches = json.loads(content)
+        structured_llm = llm.with_structured_output(PitchResponse)
+        res = structured_llm.invoke(prompt)
+        if isinstance(res, PitchResponse):
+            pitches = [p.model_dump() for p in res.pitches]
+        elif isinstance(res, dict) and "pitches" in res:
+            pitches = res["pitches"]
+        else:
+            raise ValueError(f"Unexpected response format: {type(res)}")
     except Exception as e:
-        print(f"[Graph] Pitch generator fallback due to: {e}")
+        print(f"[Graph] Structured output generator fallback due to: {e}")
         pitches = [
             {
                 "role_target": "CTO",
