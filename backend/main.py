@@ -1,7 +1,8 @@
 import os
+import time
 import json
 import urllib.parse
-from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -36,6 +37,15 @@ app = FastAPI(
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    """Performance timing middleware: benchmarks endpoint latency via time.perf_counter() and injects X-Process-Time header."""
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    process_time = time.perf_counter() - start_time
+    response.headers["X-Process-Time"] = f"{process_time:.4f}s"
+    return response
 
 # Enable CORS for Chrome Extension & Web Dashboard
 app.add_middleware(
