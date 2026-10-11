@@ -1,6 +1,8 @@
-# Environment variables (NEVER COMMIT SECRETS)
+# Environment variables & SSH Keys (NEVER COMMIT SECRETS)
 .env
 *.env
+*.pem
+*.key
 
 # Python
 __pycache__/
