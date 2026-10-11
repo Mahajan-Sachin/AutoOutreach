@@ -8,3 +8,4 @@ langgraph>=0.0.50
 duckduckgo-search>=6.0.0
 tavily-python>=0.3.0
 redis>=5.0.0
+python-multipart>=0.0.9
