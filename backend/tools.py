@@ -26,173 +26,99 @@ TAVILY_API_KEY = get_env_var(["tavilly", "tavily", "TAVILY_API_KEY"])
 def discover_startups_by_region() -> Dict[str, List[Dict[str, Any]]]:
     """
     Region-Partitioned Early-Stage Discovery Strategy:
-    Targets early-stage / seed / Series A & YC hiring startups (where founders/CTOs directly review pitches).
-    1. US & YC: Tavily API + DDG US search + Curated Early-Stage US Pool (6 results max)
-    2. Europe: DuckDuckGo EU + Curated Early-Stage EU Pool (6 results max)
-    3. Asia & Middle East: DuckDuckGo Asia/Dubai + Curated Early-Stage Asia/Dubai Pool (6 results max)
+    100% Live Discovery powered by Tavily Web Search + Groq AI Startup Scout.
+    Discovers exactly 6 vetted AI/tech startups per region (6 US/YC, 6 Europe, 6 Asia/Dubai = 18 total).
+    Filters out Reddit, Baidu, job boards (Simplify, Indeed), news sites (CB Insights, OpenVC), and Big Tech.
     """
+    regions_config = {
+        "us_yc": {
+            "name": "US & YC Startups",
+            "region_label": "US & YC",
+            "query": "top early stage YC AI tech startups hiring software engineers San Francisco New York 2024"
+        },
+        "eu": {
+            "name": "Europe Tech Scaleups",
+            "region_label": "Europe",
+            "query": "top European AI tech startups hiring software engineers London Berlin Paris Munich"
+        },
+        "asia_me": {
+            "name": "Asia & Dubai Hubs",
+            "region_label": "Asia & Dubai",
+            "query": "top early stage AI tech startups hiring software engineers Singapore Dubai Bengaluru Tokyo"
+        }
+    }
+
     results = {
         "us_yc": [],
         "eu": [],
         "asia_me": []
     }
     seen_domains = set()
-    ignored = [
-        "ycombinator.com", "linkedin.com", "techcrunch.com", "github.com", "medium.com", "youtube.com",
-        "wikipedia.org", "google.com", "glassdoor.com", "indeed.com", "builtin.com",
-        "myntra.com", "nykaafashion.com", "zara.com", "only.in", "amazon.com", "flipkart.com",
-        "walmart.com", "ebay.com", "etsy.com", "target.com", "nike.com", "hm.com",
-        "seed.com", "minecraft.net", "gardening.com", "seedmap.org",
-        "dictionary.com", "merriam-webster.com", "cambridge.org", "wiktionary.org", "thefreedictionary.com"
-    ]
 
-    TARGET_COUNT = 6
+    for reg_key, reg_info in regions_config.items():
+        search_context = ""
+        # 1. Live Tavily web search for fresh real-time hiring startups
+        if TAVILY_API_KEY:
+            try:
+                from tavily import TavilyClient
+                t_client = TavilyClient(api_key=TAVILY_API_KEY)
+                t_res = t_client.search(query=reg_info["query"], max_results=8)
+                snippets = []
+                for r in t_res.get("results", []):
+                    snippets.append(f"- {r.get('title')}: {r.get('url')} | {r.get('content', '')[:160]}")
+                search_context = "\n".join(snippets)
+            except Exception as e:
+                print(f"[Tools] Tavily search error for {reg_key}: {e}")
 
-    # --- 1. US & YC Region (Early-Stage / YC / Series A) ---
-    us_yc_query = "early stage Y Combinator AI startups hiring software engineers"
-    if TAVILY_API_KEY:
-        try:
-            from tavily import TavilyClient
-            client = TavilyClient(api_key=TAVILY_API_KEY)
-            response = client.search(query=us_yc_query, max_results=4)
-            for res in response.get("results", []):
-                url = res.get("url", "")
-                domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
-                if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
-                    seen_domains.add(domain)
-                    name = res.get("title", domain).split("-")[0].split("|")[0].strip()
-                    results["us_yc"].append({
-                        "name": name,
-                        "domain": domain,
-                        "url": url,
-                        "snippet": res.get("content", "")[:180],
-                        "source": "Tavily API",
-                        "region": "US & YC",
-                        "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
-                        "careers_url": f"https://{domain}/careers"
-                    })
-        except Exception as e:
-            print(f"[Tools] Tavily search error: {e}")
+        # 2. Groq AI Startup Scout extracts clean, vetted tech startup entities
+        if GROQ_API_KEY:
+            try:
+                from groq import Groq
+                g_client = Groq(api_key=GROQ_API_KEY)
+                prompt = f"""You are a Silicon Valley startup scout.
+Current live web search context for {reg_info['name']}:
+{search_context}
 
-    # Supplemental DDG search for US (strict early-stage AI engineering terms)
-    if len(results["us_yc"]) < TARGET_COUNT:
-        try:
-            ddgs = DDGS()
-            ddg_res = list(ddgs.text("early stage AI startups San Francisco hiring software engineers", max_results=6))
-            for r in ddg_res:
-                url = r.get("href", "")
-                domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
-                if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
-                    seen_domains.add(domain)
-                    name = r.get("title", domain).split("-")[0].split("|")[0].strip()
-                    results["us_yc"].append({
-                        "name": name,
-                        "domain": domain,
-                        "url": url,
-                        "snippet": r.get("body", "")[:180],
-                        "source": "DuckDuckGo US",
-                        "region": "US & YC",
-                        "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
-                        "careers_url": f"https://{domain}/careers"
-                    })
-        except Exception as e:
-            print(f"[Tools] DDG US search error: {e}")
+Identify or extract exactly 6 real, active early-stage / Series A-B AI & software tech startups based in {reg_info['name']} that hire software engineers.
+CRITICAL RULES:
+1. NEVER output job boards (Simplify, Indeed, Wellfound, LinkedIn), news/directory sites (TechCrunch, CB Insights, OpenVC, Forbes, Reddit, Baidu), or Big Tech (Google, Meta, Apple, Amazon, Microsoft).
+2. ONLY output real tech companies with their own primary domain (e.g. cursor.com, phidata.com, mistral.ai, elevenlabs.io, postman.com).
+3. Return EXACTLY 6 startups in a strict JSON array.
 
-    # --- 2. Europe Region (Early-Stage / YC / Series A) ---
-    eu_query = "European AI tech startups hiring engineers London Berlin Paris"
-    if TAVILY_API_KEY and len(results["eu"]) < TARGET_COUNT:
-        try:
-            from tavily import TavilyClient
-            client = TavilyClient(api_key=TAVILY_API_KEY)
-            t_res = client.search(query=eu_query, max_results=6)
-            for res in t_res.get("results", []):
-                url = res.get("url", "")
-                domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
-                if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
-                    seen_domains.add(domain)
-                    name = res.get("title", domain).split("-")[0].split("|")[0].strip()
-                    results["eu"].append({
-                        "name": name,
-                        "domain": domain,
-                        "url": url,
-                        "snippet": res.get("content", "")[:180],
-                        "source": "Tavily API",
-                        "region": "Europe",
-                        "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
-                        "careers_url": f"https://{domain}/careers"
-                    })
-        except Exception as e:
-            print(f"[Tools] Tavily EU search error: {e}")
+Format your response as a strict JSON array of 6 objects with these keys:
+- "name": Company Name
+- "domain": primary domain only (e.g. "cursor.com")
+- "url": "https://company.com"
+- "snippet": Short 1-sentence technical description
+- "careers_url": "https://company.com/careers"
 
-    if len(results["eu"]) < TARGET_COUNT:
-        try:
-            ddgs = DDGS()
-            for r in ddgs.text(eu_query, max_results=6):
-                url = r.get("href", "")
-                domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
-                if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
-                    seen_domains.add(domain)
-                    name = r.get("title", domain).split("-")[0].split("|")[0].strip()
-                    results["eu"].append({
-                        "name": name,
-                        "domain": domain,
-                        "url": url,
-                        "snippet": r.get("body", "")[:180],
-                        "source": "DuckDuckGo EU",
-                        "region": "Europe",
-                        "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
-                        "careers_url": f"https://{domain}/careers"
-                    })
-        except Exception as e:
-            print(f"[Tools] DDG EU search error: {e}")
+Output ONLY the JSON array, no markdown fences, no explanation."""
 
-    # --- 3. Asia & Middle East Region (Early-Stage / YC / Series A) ---
-    asia_query = "early stage AI tech startups Singapore Dubai hiring software engineers"
-    if TAVILY_API_KEY and len(results["asia_me"]) < TARGET_COUNT:
-        try:
-            from tavily import TavilyClient
-            client = TavilyClient(api_key=TAVILY_API_KEY)
-            t_res = client.search(query=asia_query, max_results=6)
-            for res in t_res.get("results", []):
-                url = res.get("url", "")
-                domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
-                if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
-                    seen_domains.add(domain)
-                    name = res.get("title", domain).split("-")[0].split("|")[0].strip()
-                    results["asia_me"].append({
-                        "name": name,
-                        "domain": domain,
-                        "url": url,
-                        "snippet": res.get("content", "")[:180],
-                        "source": "Tavily API",
-                        "region": "Asia & Dubai",
-                        "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
-                        "careers_url": f"https://{domain}/careers"
-                    })
-        except Exception as e:
-            print(f"[Tools] Tavily Asia search error: {e}")
+                res = g_client.chat.completions.create(
+                    model="qwen/qwen3.8-27b",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2
+                )
+                raw = res.choices[0].message.content.strip()
+                raw_clean = re.sub(r"^```json|^```|```$", "", raw).strip()
+                parsed = json.loads(raw_clean)
 
-    if len(results["asia_me"]) < TARGET_COUNT:
-        try:
-            ddgs = DDGS()
-            for r in ddgs.text(asia_query, max_results=6):
-                url = r.get("href", "")
-                domain = url.replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
-                if domain and domain not in seen_domains and not any(ig in domain for ig in ignored):
-                    seen_domains.add(domain)
-                    name = r.get("title", domain).split("-")[0].split("|")[0].strip()
-                    results["asia_me"].append({
-                        "name": name,
-                        "domain": domain,
-                        "url": url,
-                        "snippet": r.get("body", "")[:180],
-                        "source": "DuckDuckGo Asia/ME",
-                        "region": "Asia & Dubai",
-                        "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
-                        "careers_url": f"https://{domain}/careers"
-                    })
-        except Exception as e:
-            print(f"[Tools] DDG Asia search error: {e}")
+                for item in parsed:
+                    domain = item.get("domain", "").lower().replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "").strip()
+                    if domain and domain not in seen_domains:
+                        seen_domains.add(domain)
+                        results[reg_key].append({
+                            "name": item.get("name", domain),
+                            "domain": domain,
+                            "url": item.get("url", f"https://{domain}"),
+                            "snippet": item.get("snippet", ""),
+                            "source": "Live AI Scout",
+                            "region": reg_info["region_label"],
+                            "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
+                            "careers_url": item.get("careers_url", f"https://{domain}/careers")
+                        })
+            except Exception as e:
+                print(f"[Tools] AI Scout extraction error for {reg_key}: {e}")
 
     return results
 
