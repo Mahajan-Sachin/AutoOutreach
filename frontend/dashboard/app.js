@@ -3,52 +3,140 @@ const API_BASE = (window.location.origin.includes("http") && !window.location.or
 let currentPendingDrafts = [];
 let activeReviewDraft = null;
 
-async function getAuthToken() {
-    let token = localStorage.getItem("jobfit_auth_token");
+function getAuthToken() {
+    return localStorage.getItem("jobfit_auth_token");
+}
+
+function showLoginModal() {
+    const modal = document.getElementById("auth-modal");
+    if (modal) modal.style.display = "flex";
+}
+
+function hideLoginModal() {
+    const modal = document.getElementById("auth-modal");
+    if (modal) modal.style.display = "none";
+}
+
+async function verifyAuthSession() {
+    const token = getAuthToken();
     if (!token) {
-        try {
-            const res = await fetch(`${API_BASE}/auth/login`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: "sachin", password: "sachin123" })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                token = data.access_token;
-                localStorage.setItem("jobfit_auth_token", token);
-            }
-        } catch (e) {
-            console.warn("[Dashboard Auth] Auto login error:", e);
-        }
+        showLoginModal();
+        return false;
     }
-    return token;
+    try {
+        const res = await fetch(`${API_BASE}/auth/verify`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const username = data?.user?.sub || "sachin";
+            const sessionNameEl = document.getElementById("session-username");
+            if (sessionNameEl) sessionNameEl.textContent = username;
+            hideLoginModal();
+            return true;
+        } else {
+            localStorage.removeItem("jobfit_auth_token");
+            showLoginModal();
+            return false;
+        }
+    } catch (e) {
+        console.warn("[Auth Verify Error]:", e);
+        showLoginModal();
+        return false;
+    }
 }
 
 async function authFetch(url, options = {}) {
-    let token = await getAuthToken();
-    options.headers = options.headers || {};
-    if (token) {
-        options.headers["Authorization"] = `Bearer ${token}`;
+    let token = getAuthToken();
+    if (!token) {
+        showLoginModal();
+        throw new Error("Unauthorized: Please sign in first.");
     }
+    options.headers = options.headers || {};
+    options.headers["Authorization"] = `Bearer ${token}`;
+    
     let res = await fetch(url, options);
     if (res.status === 401) {
         localStorage.removeItem("jobfit_auth_token");
-        token = await getAuthToken();
-        if (token) {
-            options.headers["Authorization"] = `Bearer ${token}`;
-            res = await fetch(url, options);
-        }
+        showLoginModal();
+        throw new Error("Session expired. Please sign in again.");
     }
     return res;
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     initNavigation();
     initEventListeners();
-    loadDashboardMetrics();
-    loadPendingQueue();
-    loadHistory();
+    initAuthListeners();
+    
+    const isAuthenticated = await verifyAuthSession();
+    if (isAuthenticated) {
+        loadDashboardMetrics();
+        loadPendingQueue();
+        loadHistory();
+    }
 });
+
+function initAuthListeners() {
+    const loginForm = document.getElementById("auth-login-form");
+    if (loginForm) {
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const usernameInput = document.getElementById("auth-username-input");
+            const passwordInput = document.getElementById("auth-password-input");
+            const errorMsgEl = document.getElementById("auth-error-msg");
+            const submitBtn = document.getElementById("btn-auth-submit");
+
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value.trim();
+
+            if (!username || !password) return;
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Verifying...";
+            errorMsgEl.style.display = "none";
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    localStorage.setItem("jobfit_auth_token", data.access_token);
+                    const sessionNameEl = document.getElementById("session-username");
+                    if (sessionNameEl) sessionNameEl.textContent = username;
+                    
+                    hideLoginModal();
+                    passwordInput.value = "";
+                    
+                    loadDashboardMetrics();
+                    loadPendingQueue();
+                    loadHistory();
+                } else {
+                    errorMsgEl.textContent = "Invalid username or password. Access denied.";
+                    errorMsgEl.style.display = "block";
+                }
+            } catch (err) {
+                errorMsgEl.textContent = "Connection error. Is backend online?";
+                errorMsgEl.style.display = "block";
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = "<span>Sign In to Dashboard</span>";
+            }
+        });
+    }
+
+    const logoutBtn = document.getElementById("btn-logout");
+    if (logoutBtn) {
+        logoutBtn.addEventListener("click", () => {
+            localStorage.removeItem("jobfit_auth_token");
+            showLoginModal();
+        });
+    }
+}
 
 function initNavigation() {
     const navItems = document.querySelectorAll(".nav-item");

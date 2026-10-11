@@ -43,6 +43,16 @@
                 </button>
             </nav>
 
+            <div class="user-session" id="user-session-panel" style="margin-top:auto; margin-bottom:12px; padding:10px 14px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; display:flex; align-items:center; justify-content:space-between;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:14px;">👤</span>
+                    <span id="session-username" style="font-size:12px; font-weight:600; color:var(--text-main);">Admin</span>
+                </div>
+                <button id="btn-logout" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:12px; display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:6px; transition:all 0.2s;" title="Sign Out">
+                    <span>🚪</span> Log Out
+                </button>
+            </div>
+
             <div class="system-status">
                 <div class="status-indicator online"></div>
                 <div class="status-info">
@@ -259,6 +269,31 @@
                     <span>✉️ Open in Gmail Compose & Approve</span>
                 </a>
             </div>
+        </div>
+    </div>
+
+    <!-- Admin Authentication Modal Gate -->
+    <div class="modal-backdrop" id="auth-modal" style="display:none; z-index:9999;">
+        <div class="modal-card" style="width: 420px; text-align: center;">
+            <div class="modal-header" style="border:none; padding: 28px 24px 10px; justify-content: center; flex-direction: column; gap: 8px;">
+                <div class="logo-icon" style="margin: 0 auto 8px; width: 52px; height: 52px; font-size: 26px;">🔐</div>
+                <h3 style="font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Admin Sign In</h3>
+                <p style="font-size: 13px; color: var(--text-muted);">Authentication required to access AutoOutreach</p>
+            </div>
+            <form id="auth-login-form" style="padding: 10px 24px 28px;">
+                <div id="auth-error-msg" style="display:none; color: #ff6b6b; background: rgba(255, 107, 107, 0.1); border: 1px solid rgba(255, 107, 107, 0.3); padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; text-align: left;"></div>
+                <div class="info-group" style="text-align: left; margin-bottom: 14px;">
+                    <label>Admin Username</label>
+                    <input type="text" id="auth-username-input" placeholder="e.g. sachin" required autocomplete="username">
+                </div>
+                <div class="info-group" style="text-align: left; margin-bottom: 22px;">
+                    <label>Admin Password</label>
+                    <input type="password" id="auth-password-input" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary" id="btn-auth-submit" style="width: 100%; justify-content: center; padding: 12px; font-size: 15px;">
+                    <span>Sign In to Dashboard</span>
+                </button>
+            </form>
         </div>
     </div>
 
