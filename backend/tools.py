@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import asyncio
 import requests
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
@@ -23,12 +24,11 @@ HUNTER_API_KEY = get_env_var(["hunter", "HUNTER_API_KEY"])
 APOLLO_API_KEY = get_env_var(["appolo", "apollo", "APOLLO_API_KEY"])
 TAVILY_API_KEY = get_env_var(["tavilly", "tavily", "TAVILY_API_KEY"])
 
-def discover_startups_by_region() -> Dict[str, List[Dict[str, Any]]]:
+async def discover_startups_by_region() -> Dict[str, List[Dict[str, Any]]]:
     """
     Region-Partitioned Early-Stage Discovery Strategy:
-    100% Live Discovery powered by Tavily Web Search + Groq AI Startup Scout.
-    Discovers exactly 6 vetted AI/tech startups per region (6 US/YC, 6 Europe, 6 Asia/Dubai = 18 total).
-    Filters out Reddit, Baidu, job boards (Simplify, Indeed), news sites (CB Insights, OpenVC), and Big Tech.
+    100% Live Discovery powered by AsyncTavilyClient + AsyncGroq AI Startup Scout.
+    Concurrent non-blocking fetch across US/YC, Europe, and Asia/Dubai hubs via asyncio.gather.
     """
     regions_config = {
         "us_yc": {
@@ -54,30 +54,25 @@ def discover_startups_by_region() -> Dict[str, List[Dict[str, Any]]]:
         "asia_me": []
     }
     seen_domains = set()
-    from concurrent.futures import ThreadPoolExecutor
 
-    def fetch_region(reg_key: str, reg_info: dict) -> tuple:
+    async def fetch_region(reg_key: str, reg_info: dict) -> tuple:
         search_context = ""
         items = []
 
-        # 1. Live Tavily web search for fresh real-time hiring startups
         if TAVILY_API_KEY:
             try:
-                from tavily import TavilyClient
-                t_client = TavilyClient(api_key=TAVILY_API_KEY)
-                t_res = t_client.search(query=reg_info["query"], max_results=8)
-                snippets = []
-                for r in t_res.get("results", []):
-                    snippets.append(f"- {r.get('title')}: {r.get('url')} | {r.get('content', '')[:160]}")
+                from tavily import AsyncTavilyClient
+                t_client = AsyncTavilyClient(api_key=TAVILY_API_KEY)
+                t_res = await t_client.search(query=reg_info["query"], max_results=8)
+                snippets = [f"- {r.get('title')}: {r.get('url')} | {r.get('content', '')[:160]}" for r in t_res.get("results", [])]
                 search_context = "\n".join(snippets)
             except Exception as e:
-                print(f"[Tools] Tavily search error for {reg_key}: {e}")
+                print(f"[Tools] Async Tavily search error for {reg_key}: {e}")
 
-        # 2. Groq AI Startup Scout extracts clean, vetted tech startup entities
         if GROQ_API_KEY:
             try:
-                from groq import Groq
-                g_client = Groq(api_key=GROQ_API_KEY)
+                from groq import AsyncGroq
+                g_client = AsyncGroq(api_key=GROQ_API_KEY)
                 prompt = f"""You are a Silicon Valley startup scout.
 Current live web search context for {reg_info['name']}:
 {search_context}
@@ -97,7 +92,7 @@ Format your response as a strict JSON array of 6 objects with these keys:
 
 Output ONLY the JSON array, no markdown fences, no explanation."""
 
-                res = g_client.chat.completions.create(
+                res = await g_client.chat.completions.create(
                     model="qwen/qwen3.8-27b",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2
@@ -120,22 +115,17 @@ Output ONLY the JSON array, no markdown fences, no explanation."""
                             "careers_url": item.get("careers_url", f"https://{domain}/careers")
                         })
             except Exception as e:
-                print(f"[Tools] AI Scout extraction error for {reg_key}: {e}")
+                print(f"[Tools] Async AI Scout error for {reg_key}: {e}")
 
         return reg_key, items
 
-    # Run all 3 regions concurrently in parallel threads (4-5s total response time)
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(fetch_region, k, v) for k, v in regions_config.items()]
-        for f in futures:
-            try:
-                reg_key, items = f.result(timeout=15)
-                for item in items:
-                    if item["domain"] not in seen_domains:
-                        seen_domains.add(item["domain"])
-                        results[reg_key].append(item)
-            except Exception as e:
-                print(f"[Tools] Region fetch thread error: {e}")
+    # Concurrent non-blocking fetch across all 3 regions using standard asyncio.gather
+    completed = await asyncio.gather(*(fetch_region(k, v) for k, v in regions_config.items()))
+    for reg_key, items in completed:
+        for item in items:
+            if item["domain"] not in seen_domains:
+                seen_domains.add(item["domain"])
+                results[reg_key].append(item)
 
     return results
 

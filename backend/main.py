@@ -133,9 +133,9 @@ def health_check():
     return {"status": "online", "message": "Outreach Engine Ready"}
 
 @app.get("/api/discover")
-def discover_startups(admin: dict = Depends(get_current_admin)):
+async def discover_startups(admin: dict = Depends(get_current_admin)):
     """Discover region-partitioned US/YC, European, and Asian/Middle-East tech startups."""
-    raw_regions = discover_startups_by_region()
+    raw_regions = await discover_startups_by_region()
     
     processed_regions = {}
     total_found = 0
