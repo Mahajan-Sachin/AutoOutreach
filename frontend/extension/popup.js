@@ -1,4 +1,4 @@
-const BACKEND_API = "http://127.0.0.1:8000/api";
+const BACKEND_API = "http://4.145.88.53:8000/api";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const modeBadge = document.getElementById("mode-badge");
