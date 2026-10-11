@@ -1,5 +1,5 @@
 import json
-from typing import TypedDict, List, Dict, Any, Optional
+from typing import TypedDict, List, Dict, Any, Optional, Literal
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
 from database import is_domain_cached, save_company, save_contact, save_outreach_draft
@@ -38,15 +38,24 @@ class OutreachState(TypedDict):
     pitches: List[Dict[str, Any]]
     status: str
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 class PitchItem(BaseModel):
-    role_target: str = Field(description="Target role category: 'CTO', 'CEO', or 'HR'")
+    role_target: Literal["CTO", "CEO", "HR"] = Field(description="Target role category: 'CTO', 'CEO', or 'HR'")
     pitch_subject: str = Field(description="Impactful cold email subject line")
     pitch_body: str = Field(description="Exact 5-bullet personalized outreach pitch body")
 
 class PitchResponse(BaseModel):
-    pitches: List[PitchItem] = Field(description="List of 3 customized pitches tailored for CTO, CEO, and HR")
+    pitches: List[PitchItem] = Field(description="List containing exactly 3 customized pitches for CTO, CEO, and HR")
+
+    @field_validator("pitches")
+    @classmethod
+    def validate_roles(cls, v: List[PitchItem]) -> List[PitchItem]:
+        roles = {p.role_target.upper() for p in v}
+        required_roles = {"CTO", "CEO", "HR"}
+        if not required_roles.issubset(roles):
+            raise ValueError(f"Must include pitches for all required roles: {required_roles}. Found: {roles}")
+        return v
 
 # Initialize Groq LLM
 llm = ChatGroq(
