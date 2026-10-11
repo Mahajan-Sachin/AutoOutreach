@@ -38,24 +38,20 @@ class OutreachState(TypedDict):
     pitches: List[Dict[str, Any]]
     status: str
 
-from pydantic import BaseModel, Field, field_validator
+DEFAULT_PITCH_TEMPLATE = """Hi {first_name},
+
+• B.Tech CSE student focused on AI/ML and production systems.
+• Merged PRs in Google's TensorFlow, Red Hat's Podman, and pandas. Shipped production LLM applications.
+• Saw your engineering work at {company_name} — think there's real overlap with what I'm building.
+• Resume attached below — feel free to share with your team so they know what to test me on.
+• So: don't believe the resume. Give me an assignment, see my work, then decide."""
+
+from pydantic import BaseModel, Field
 
 class PitchItem(BaseModel):
-    role_target: Literal["CTO", "CEO", "HR"] = Field(description="Target role category: 'CTO', 'CEO', or 'HR'")
+    role_target: str = Field(default="Decision Maker", description="Target role category or title")
     pitch_subject: str = Field(description="Impactful cold email subject line")
     pitch_body: str = Field(description="Exact 5-bullet personalized outreach pitch body")
-
-class PitchResponse(BaseModel):
-    pitches: List[PitchItem] = Field(description="List containing exactly 3 customized pitches for CTO, CEO, and HR")
-
-    @field_validator("pitches")
-    @classmethod
-    def validate_roles(cls, v: List[PitchItem]) -> List[PitchItem]:
-        roles = {p.role_target.upper() for p in v}
-        required_roles = {"CTO", "CEO", "HR"}
-        if not required_roles.issubset(roles):
-            raise ValueError(f"Must include pitches for all required roles: {required_roles}. Found: {roles}")
-        return v
 
 # Initialize Groq LLM
 llm = ChatGroq(
@@ -110,14 +106,14 @@ def role_specific_pitch_generator_node(state: OutreachState) -> OutreachState:
     person_name = state.get("person_name", "")
     person_title = state.get("person_title", "")
     contacts = state.get("contacts", [])
-    
-    target_person_str = f"Specific Person: {person_name} ({person_title})" if mode == "person" and person_name else "Decision Maker Team"
+    role_target = person_title or ("Specific Contact" if person_name else "Founder / Tech Lead")
+    target_person_str = f"Specific Person: {person_name} ({role_target})" if person_name else "Decision Maker Team"
     print(f"[Graph] Generating tailored 5-bullet pitch for {target_person_str} at {company_name}...")
     
     first_name = person_name.split()[0] if person_name else "there"
     
     prompt = f"""
-    You are writing ultra-concise, high-converting 5-bullet cold outreach emails for a top-tier student software engineer (Sachin Mahajan).
+    You are writing an ultra-concise, high-converting 5-bullet cold outreach email for a top-tier student software engineer (Sachin Mahajan).
 
     CANDIDATE PROOF OF WORK:
     - B.Tech CSE student focused on AI/ML and production systems.
@@ -125,68 +121,42 @@ def role_specific_pitch_generator_node(state: OutreachState) -> OutreachState:
     
     TARGET INFORMATION:
     Company Name: {company_name}
-    Target Mode: {mode}
-    Target Person Name: {person_name}
-    Target Person Title/Role: {person_title}
+    Target Person Name: {person_name or 'Hiring Lead'}
+    Target Role/Title: {role_target}
     Company Description/Tech: {company_text[:1200]}
     
     CRITICAL FORMAT RULES:
     1. Subject Line: Must use impact over jargon (e.g. "Merged code in Google's TensorFlow & Red Hat's Podman" or "Quick 15-second note: AI/ML Engineering & OSS proof").
-    2. Body Format: MUST BE EXACTLY 5 BULLET POINTS preceded by a short 1-line greeting (e.g., "Hi {first_name},").
+    2. Body Format: MUST BE EXACTLY 5 BULLET POINTS preceded by a short 1-line greeting ("Hi {first_name},"):
        - Bullet 1: Identity & focus ("• B.Tech CSE student focused on AI/ML and production systems.")
        - Bullet 2: Unassailable OSS proof of work ("• Merged PRs in Google's TensorFlow, Red Hat's Podman, and pandas. Shipped production LLM applications.")
-       - Bullet 3: Specific product alignment with {company_name} ("• Saw your work in [specific tech/product from web context] — think there's real overlap with what I'm building.")
+       - Bullet 3: Specific product alignment with {company_name} ("• Saw your engineering work at {company_name} — think there's real overlap with what I'm building.")
        - Bullet 4: Resume attached ("• Resume attached below — feel free to share with your team so they know what to test me on.")
        - Bullet 5: Punchy zero-risk trial ask ("• So: don't believe the resume. Give me an assignment, see my work, then decide.")
     3. Do NOT use fancy AI fluff, robotic buzzwords, or corporate filler. Keep it direct, polite, and confident.
-
-    Generate 3 distinct pitches tailored respectively for CTO (technical depth), CEO (velocity/execution), and HR (role fit).
     """
     
     try:
-        structured_llm = llm.with_structured_output(PitchResponse)
+        structured_llm = llm.with_structured_output(PitchItem)
         res = structured_llm.invoke(prompt)
-        if isinstance(res, PitchResponse):
-            pitches = [p.model_dump() for p in res.pitches]
-        elif isinstance(res, dict) and "pitches" in res:
-            pitches = res["pitches"]
+        if isinstance(res, PitchItem):
+            pitch_dict = res.model_dump()
+        elif isinstance(res, dict):
+            pitch_dict = res
         else:
             raise ValueError(f"Unexpected response format: {type(res)}")
+        pitch_dict["role_target"] = role_target
     except Exception as e:
         print(f"[Graph] Structured output generator fallback due to: {e}")
-        pitches = [
-            {
-                "role_target": "CTO",
-                "pitch_subject": f"Merged code in Google's TensorFlow & Red Hat's Podman",
-                "pitch_body": f"Hi {first_name},\n\n• B.Tech CSE student focused on AI/ML and production systems.\n• Merged PRs in Google's TensorFlow, Red Hat's Podman, and pandas. Shipped production LLM applications.\n• Saw your engineering work at {company_name} — think there's real overlap with what I'm building.\n• Resume attached below — feel free to share with your team so they know what to test me on.\n• So: don't believe the resume. Give me an assignment, see my work, then decide."
-            },
-            {
-                "role_target": "CEO",
-                "pitch_subject": f"Quick 15-second note: AI/ML Engineering & OSS proof of work",
-                "pitch_body": f"Hi {first_name},\n\n• B.Tech CSE student focused on AI/ML and production systems.\n• Merged PRs in Google's TensorFlow, Red Hat's Podman, and pandas. Shipped production LLM applications.\n• Saw {company_name}'s product progress — think I can add immediate value on shipping fast.\n• Resume attached below — feel free to share with your tech team so they know what to ask for.\n• So: don't believe the resume. Give me an assignment or trial sprint, see my work, then decide."
-            },
-            {
-                "role_target": "HR",
-                "pitch_subject": f"AI/ML Engineer Intern — Google TensorFlow & Podman Contributor",
-                "pitch_body": f"Hi {first_name},\n\n• B.Tech CSE student focused on AI/ML and production systems.\n• Merged PRs in Google's TensorFlow, Red Hat's Podman, and pandas. Shipped production LLM applications.\n• Saw {company_name} is hiring engineering talent — think my background aligns closely with your tech stack.\n• Resume attached below — feel free to pass to your engineering leads.\n• So: happy to take on a technical trial task or coding assignment first before any formal loop."
-            }
-        ]
-        
-    # If targeting a specific person, pick the single pitch that best matches their title
-    if mode == "person" and person_title and pitches:
-        title_lower = person_title.lower()
-        if any(kw in title_lower for kw in ["cto", "tech", "vp", "architect", "lead", "engineering"]):
-            pitches = [p for p in pitches if p.get("role_target") == "CTO"] or [pitches[0]]
-        elif any(kw in title_lower for kw in ["ceo", "founder", "president"]):
-            pitches = [p for p in pitches if p.get("role_target") == "CEO"] or [pitches[1] if len(pitches) > 1 else pitches[0]]
-        elif any(kw in title_lower for kw in ["hr", "recruiter", "talent", "people"]):
-            pitches = [p for p in pitches if p.get("role_target") == "HR"] or [pitches[-1]]
-        else:
-            pitches = [pitches[0]]
+        pitch_dict = {
+            "role_target": role_target,
+            "pitch_subject": "Merged code in Google's TensorFlow & Red Hat's Podman",
+            "pitch_body": DEFAULT_PITCH_TEMPLATE.format(first_name=first_name, company_name=company_name)
+        }
 
     return {
         **state,
-        "pitches": pitches
+        "pitches": [pitch_dict]
     }
 
 def hitl_save_node(state: OutreachState) -> OutreachState:
