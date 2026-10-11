@@ -216,9 +216,8 @@ def process_outreach(req: OutreachRequest, background_tasks: BackgroundTasks, ad
     # Async Task Queue Decoupling (HTTP 202 Producer Pattern)
     task_id = f"{clean_domain}_{int(time.time())}"
     redis_key = f"task:{task_id}"
-    
     try:
-        r_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+        r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
         r_client.set(redis_key, json.dumps({"status": "QUEUED", "domain": clean_domain}), ex=3600)
     except Exception as e:
         print(f"[Async Redis Store Error]: {e}")
