@@ -75,38 +75,8 @@ def init_db():
         )
     """)
 
-    # Users & Role-Based Access Control table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT DEFAULT 'admin',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # Seed default admin user (sachin / sachin123) if no users exist
-    cursor.execute("SELECT COUNT(*) as count FROM users")
-    user_count = cursor.fetchone()["count"]
-    if user_count == 0:
-        import bcrypt
-        default_hash = bcrypt.hashpw(b"sachin123", bcrypt.gensalt()).decode("utf-8")
-        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                       ("sachin", default_hash, "admin"))
-        print("[Database] Seeded initial admin account: 'sachin'")
-
     conn.commit()
     conn.close()
-
-def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
-    """Retrieve user record from SQLite by username."""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = ?", (username.strip().lower(),))
-    row = cursor.fetchone()
-    conn.close()
-    return dict(row) if row else None
 
 def is_domain_cached(domain: str) -> Optional[Dict[str, Any]]:
     """2-Tier Cache Check: L2 Redis (RAM <1ms) -> L3 SQLite (Disk) -> Full LangGraph API Execution."""

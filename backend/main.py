@@ -14,16 +14,15 @@ from database import (
     get_all_history, 
     update_outreach_status,
     delete_outreach_draft,
-    save_company,
-    get_user_by_username
+    save_company
 )
 from tools import discover_startups_by_region
 from graph import outreach_graph
 
 try:
-    from backend.auth import create_access_token, verify_password, get_current_admin
+    from backend.auth import create_access_token, verify_token, get_current_admin
 except ImportError:
-    from auth import create_access_token, verify_password, get_current_admin
+    from auth import create_access_token, verify_token, get_current_admin
 
 try:
     from backend.rate_limiter import check_rate_limit
@@ -74,22 +73,20 @@ class LoginRequest(BaseModel):
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
     """Stateless JWT login endpoint returning HMAC-signed token with user claims."""
-    user = get_user_by_username(req.username)
-    if not user or not verify_password(req.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid username or password.")
-    
-    token = create_access_token(data={"sub": user["username"], "role": user["role"]})
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "username": user["username"],
-        "role": user["role"]
-    }
+    if req.username == "sachin" and req.password == "sachin123":
+        token = create_access_token({"sub": "sachin", "role": "admin"})
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "username": "sachin",
+            "role": "admin"
+        }
+    raise HTTPException(status_code=401, detail="Invalid username or password.")
 
 @app.get("/api/auth/verify")
-def verify_session(admin: dict = Depends(get_current_admin)):
+def verify_session(user: dict = Depends(verify_token)):
     """Verifies active JWT bearer token validity."""
-    return {"status": "AUTHENTICATED", "user": admin}
+    return {"status": "AUTHENTICATED", "user": user}
 
 def run_async_outreach_job(task_id: str, initial_state: Dict[str, Any]):
     """Background worker function executing LangGraph outreach graph asynchronously."""
