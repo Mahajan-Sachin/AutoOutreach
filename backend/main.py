@@ -34,6 +34,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+
 # Enable CORS for Chrome Extension & Web Dashboard
 app.add_middleware(
     CORSMiddleware,
@@ -95,7 +98,7 @@ def run_async_outreach_job(task_id: str, initial_state: Dict[str, Any]):
     
     r_client = None
     try:
-        r_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+        r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
     except Exception as e:
         print(f"[Async Worker Redis Error]: {e}")
 
@@ -234,7 +237,7 @@ def get_task_status(task_id: str):
     """Queries real-time async task execution status from Redis Task Store."""
     import redis
     try:
-        r_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+        r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
         clean_key = task_id if task_id.startswith("task:") else f"task:{task_id}"
         task_data = r_client.get(clean_key)
         if task_data:
