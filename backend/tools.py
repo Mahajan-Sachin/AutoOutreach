@@ -54,9 +54,12 @@ def discover_startups_by_region() -> Dict[str, List[Dict[str, Any]]]:
         "asia_me": []
     }
     seen_domains = set()
+    from concurrent.futures import ThreadPoolExecutor
 
-    for reg_key, reg_info in regions_config.items():
+    def fetch_region(reg_key: str, reg_info: dict) -> tuple:
         search_context = ""
+        items = []
+
         # 1. Live Tavily web search for fresh real-time hiring startups
         if TAVILY_API_KEY:
             try:
@@ -105,9 +108,8 @@ Output ONLY the JSON array, no markdown fences, no explanation."""
 
                 for item in parsed:
                     domain = item.get("domain", "").lower().replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "").strip()
-                    if domain and domain not in seen_domains:
-                        seen_domains.add(domain)
-                        results[reg_key].append({
+                    if domain:
+                        items.append({
                             "name": item.get("name", domain),
                             "domain": domain,
                             "url": item.get("url", f"https://{domain}"),
@@ -119,6 +121,21 @@ Output ONLY the JSON array, no markdown fences, no explanation."""
                         })
             except Exception as e:
                 print(f"[Tools] AI Scout extraction error for {reg_key}: {e}")
+
+        return reg_key, items
+
+    # Run all 3 regions concurrently in parallel threads (4-5s total response time)
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(fetch_region, k, v) for k, v in regions_config.items()]
+        for f in futures:
+            try:
+                reg_key, items = f.result(timeout=15)
+                for item in items:
+                    if item["domain"] not in seen_domains:
+                        seen_domains.add(item["domain"])
+                        results[reg_key].append(item)
+            except Exception as e:
+                print(f"[Tools] Region fetch thread error: {e}")
 
     return results
 
