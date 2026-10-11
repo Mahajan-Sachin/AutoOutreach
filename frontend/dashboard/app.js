@@ -3,6 +3,45 @@ const API_BASE = (window.location.origin.includes("http") && !window.location.or
 let currentPendingDrafts = [];
 let activeReviewDraft = null;
 
+async function getAuthToken() {
+    let token = localStorage.getItem("jobfit_auth_token");
+    if (!token) {
+        try {
+            const res = await fetch(`${API_BASE}/auth/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: "sachin", password: "sachin123" })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                token = data.access_token;
+                localStorage.setItem("jobfit_auth_token", token);
+            }
+        } catch (e) {
+            console.warn("[Dashboard Auth] Auto login error:", e);
+        }
+    }
+    return token;
+}
+
+async function authFetch(url, options = {}) {
+    let token = await getAuthToken();
+    options.headers = options.headers || {};
+    if (token) {
+        options.headers["Authorization"] = `Bearer ${token}`;
+    }
+    let res = await fetch(url, options);
+    if (res.status === 401) {
+        localStorage.removeItem("jobfit_auth_token");
+        token = await getAuthToken();
+        if (token) {
+            options.headers["Authorization"] = `Bearer ${token}`;
+            res = await fetch(url, options);
+        }
+    }
+    return res;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     initNavigation();
     initEventListeners();
@@ -199,7 +238,7 @@ async function triggerOutreachForDomain(domain) {
 
 async function loadPendingQueue() {
     try {
-        const res = await fetch(`${API_BASE}/pending`);
+        const res = await authFetch(`${API_BASE}/pending`);
         const data = await res.json();
         currentPendingDrafts = data.pending_drafts || [];
 
@@ -294,7 +333,7 @@ function closeModal() {
 async function approveActivePitch() {
     if (!activeReviewDraft) return;
     try {
-        await fetch(`${API_BASE}/approve`, {
+        await authFetch(`${API_BASE}/approve`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ draft_id: activeReviewDraft.draft_id, action: "approve" })
@@ -314,7 +353,7 @@ async function approveActivePitch() {
 async function rejectActivePitch() {
     if (!activeReviewDraft) return;
     try {
-        await fetch(`${API_BASE}/approve`, {
+        await authFetch(`${API_BASE}/approve`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ draft_id: activeReviewDraft.draft_id, action: "reject" })
@@ -333,7 +372,7 @@ async function deleteActivePitch() {
 
 async function deleteDraft(draftId) {
     try {
-        await fetch(`${API_BASE}/draft/${draftId}`, { method: "DELETE" });
+        await authFetch(`${API_BASE}/draft/${draftId}`, { method: "DELETE" });
         if (activeReviewDraft && activeReviewDraft.draft_id === draftId) {
             closeModal();
         }
@@ -346,7 +385,7 @@ async function deleteDraft(draftId) {
 
 async function loadHistory() {
     try {
-        const res = await fetch(`${API_BASE}/history`);
+        const res = await authFetch(`${API_BASE}/history`);
         const data = await res.json();
         const history = data.history || [];
 

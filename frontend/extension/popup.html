@@ -12,31 +12,52 @@
       <span class="badge" id="mode-badge">Detecting...</span>
     </div>
 
-    <div class="target-card">
-      <div class="field-group" id="person-fields">
-        <div class="label">Target Decision Maker</div>
-        <input type="text" class="input-field" id="person-name" placeholder="Full Name (e.g. John Doe)">
-        <input type="text" class="input-field" id="person-title" placeholder="Title (e.g. Co-Founder / CTO)">
-      </div>
-
+    <!-- 1. Authentication View (When logged out) -->
+    <div class="target-card" id="auth-section" style="display: none;">
+      <div class="label" style="color: #00f0ff; font-weight: 700;">🔐 Admin Authentication</div>
       <div class="field-group">
-        <div class="label">Company Name & Domain</div>
-        <input type="text" class="input-field" id="company-name" placeholder="Company Name">
-        <input type="text" class="input-field" id="company-domain" placeholder="Domain (e.g. acme.com)">
+        <input type="text" class="input-field" id="auth-username" placeholder="Username (sachin)" value="sachin">
+        <input type="password" class="input-field" id="auth-password" placeholder="Password" value="sachin123">
       </div>
+      <button class="btn btn-primary" id="btn-login" style="margin-top: 6px;">
+        🔑 Sign In with JWT
+      </button>
+      <div id="auth-error" style="color: #ff4757; font-size: 11px; display: none;"></div>
     </div>
 
-    <div class="actions">
-      <button class="btn btn-primary" id="btn-run-outreach">
-        ⚡ Generate Outreach Pitch
-      </button>
-      <a href="http://4.145.88.53:8000/dashboard" target="_blank" class="btn btn-secondary">
-        🌐 Open Dashboard
-      </a>
+    <!-- 2. Main Outreach View (When authenticated) -->
+    <div id="main-section" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-size: 11px; color: #a4b0be;" id="user-display">🟢 @sachin (Admin)</span>
+        <button id="btn-logout" style="background: none; border: none; color: #ff6b81; font-size: 11px; cursor: pointer; text-decoration: underline;">Logout</button>
+      </div>
+
+      <div class="target-card">
+        <div class="field-group" id="person-fields">
+          <div class="label">Target Decision Maker</div>
+          <input type="text" class="input-field" id="person-name" placeholder="Full Name (e.g. John Doe)">
+          <input type="text" class="input-field" id="person-title" placeholder="Title (e.g. Co-Founder / CTO)">
+        </div>
+
+        <div class="field-group">
+          <div class="label">Company Name & Domain</div>
+          <input type="text" class="input-field" id="company-name" placeholder="Company Name">
+          <input type="text" class="input-field" id="company-domain" placeholder="Domain (e.g. acme.com)">
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top: 12px;">
+        <button class="btn btn-primary" id="btn-run-outreach">
+          ⚡ Generate Outreach Pitch
+        </button>
+        <a href="http://4.145.88.53:8000/dashboard" target="_blank" class="btn btn-secondary">
+          🌐 Open Dashboard
+        </a>
+      </div>
     </div>
 
     <div class="status-box" id="status-box">
-      Ready to analyze target and generate 1-click tailored email pitch.
+      Checking authentication session...
     </div>
   </div>
 

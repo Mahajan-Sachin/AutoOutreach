@@ -1,22 +1,29 @@
 import os
 import json
 import urllib.parse
-from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
 from fastapi.staticfiles import StaticFiles
 from database import (
+    init_db,
     is_domain_cached, 
     get_pending_outreach, 
     get_all_history, 
     update_outreach_status,
     delete_outreach_draft,
-    save_company
+    save_company,
+    get_user_by_username
 )
 from tools import discover_startups_by_region
 from graph import outreach_graph
+
+try:
+    from backend.auth import create_access_token, verify_password, get_current_admin
+except ImportError:
+    from auth import create_access_token, verify_password, get_current_admin
 
 try:
     from backend.rate_limiter import check_rate_limit
@@ -59,6 +66,30 @@ class ApproveRequest(BaseModel):
     subject: Optional[str] = None
     body: Optional[str] = None
     action: str = "approve"  # approve or reject
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/auth/login")
+def login(req: LoginRequest):
+    """Stateless JWT login endpoint returning HMAC-signed token with user claims."""
+    user = get_user_by_username(req.username)
+    if not user or not verify_password(req.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    
+    token = create_access_token(data={"sub": user["username"], "role": user["role"]})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "username": user["username"],
+        "role": user["role"]
+    }
+
+@app.get("/api/auth/verify")
+def verify_session(admin: dict = Depends(get_current_admin)):
+    """Verifies active JWT bearer token validity."""
+    return {"status": "AUTHENTICATED", "user": admin}
 
 def run_async_outreach_job(task_id: str, initial_state: Dict[str, Any]):
     """Background worker function executing LangGraph outreach graph asynchronously."""
@@ -128,7 +159,7 @@ def discover_startups():
     }
 
 @app.post("/api/outreach", status_code=202)
-def process_outreach(req: OutreachRequest, background_tasks: BackgroundTasks):
+def process_outreach(req: OutreachRequest, background_tasks: BackgroundTasks, admin: dict = Depends(get_current_admin)):
     """
     Triggers LangGraph outreach pipeline asynchronously (Producer-Consumer Pattern).
     Returns HTTP 202 Accepted immediately with a task_id for non-blocking execution.
@@ -219,7 +250,7 @@ def get_task_status(task_id: str):
         return {"status": "ERROR", "task_id": task_id, "message": f"Task Store Error: {str(e)}"}
 
 @app.get("/api/pending")
-def get_pending():
+def get_pending(admin: dict = Depends(get_current_admin)):
     """Fetch pending Human-In-The-Loop outreach drafts."""
     drafts = get_pending_outreach()
     
@@ -238,7 +269,7 @@ def get_pending():
     return {"pending_drafts": drafts}
 
 @app.post("/api/approve")
-def approve_draft(req: ApproveRequest):
+def approve_draft(req: ApproveRequest, admin: dict = Depends(get_current_admin)):
     """Approve or Reject an outreach draft and update SQLite DB."""
     if req.action == "reject":
         update_outreach_status(req.draft_id, "REJECTED")
@@ -248,82 +279,19 @@ def approve_draft(req: ApproveRequest):
     return {"status": "APPROVED", "draft_id": req.draft_id}
 
 @app.delete("/api/draft/{draft_id}")
-def delete_draft(draft_id: int):
+def delete_draft(draft_id: int, admin: dict = Depends(get_current_admin)):
     """Delete a draft from SQLite DB."""
     delete_outreach_draft(draft_id)
     return {"status": "DELETED", "draft_id": draft_id}
 
-class RoleSearchRequest(BaseModel):
-    role_query: Optional[str] = ""
-    limit: Optional[int] = 10
-
-class AutofillRequest(BaseModel):
-    url: str
-    submit_live: Optional[bool] = False
-
 @app.on_event("startup")
 def startup_event():
-    """Start background nightly scan scheduler on server startup."""
-    try:
-        start_scheduler_thread(hour=2, minute=0)
-    except Exception as e:
-        print(f"[Main Startup] Scheduler init error: {e}")
-
-@app.get("/api/profile")
-def get_profile():
-    """Fetch candidate master profile."""
-    return get_candidate_profile()
-
-@app.post("/api/profile")
-def update_profile(data: Dict[str, Any]):
-    """Update candidate master profile."""
-    updated = save_candidate_profile(data)
-    return {"status": "SUCCESS", "profile": updated}
-
-@app.post("/api/upload-resume")
-async def upload_resume(file: UploadFile = File(...)):
-    """Upload PDF resume, parse text with pypdf + Groq LLM, and update candidate master profile."""
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only .pdf resume files are supported.")
-        
-    temp_dir = os.path.join(os.path.dirname(__file__), "uploads")
-    os.makedirs(temp_dir, exist_ok=True)
-    temp_path = os.path.join(temp_dir, file.filename)
-    
-    with open(temp_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
-        
-    try:
-        updated_profile = process_resume_pdf(temp_path)
-        return {
-            "status": "SUCCESS",
-            "message": f"Successfully parsed {file.filename} with Groq AI!",
-            "profile": updated_profile
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Resume PDF parsing error: {str(e)}")
-
-@app.post("/api/role-search")
-def role_search(req: RoleSearchRequest):
-    """Search active job postings for candidate's target role across ATS portals."""
-    jobs = search_jobs_by_role(role_query=req.role_query or "", limit=req.limit or 10)
-    return {"total": len(jobs), "jobs": jobs}
-
-@app.post("/api/autofill")
-def run_autofill(req: AutofillRequest, background_tasks: BackgroundTasks):
-    """Trigger Playwright auto-fill on Greenhouse, Lever, or Ashby portal link."""
-    result = autofill_job_application(url=req.url, submit_live=req.submit_live or False)
-    return result
-
-@app.post("/api/nightly-scan")
-def trigger_nightly_scan(background_tasks: BackgroundTasks):
-    """Manually trigger the overnight autonomous scan."""
-    background_tasks.add_task(run_nightly_job_scan)
-    return {"status": "STARTED", "message": "Nightly autonomous scan started in background."}
+    """Initialize database tables and seed admin user on startup."""
+    init_db()
+    print("[Main Startup] Database initialized and admin user verified.")
 
 @app.get("/api/history")
-def get_history():
+def get_history(admin: dict = Depends(get_current_admin)):
     """Fetch all processed outreach history."""
     history = get_all_history()
     return {"history": history}
