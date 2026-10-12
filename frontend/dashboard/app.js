@@ -74,6 +74,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadDashboardMetrics();
         loadPendingQueue();
         loadHistory();
+        discoverStartups();
     }
 });
 
@@ -115,6 +116,7 @@ function initAuthListeners() {
                     loadDashboardMetrics();
                     loadPendingQueue();
                     loadHistory();
+                    discoverStartups();
                 } else {
                     errorMsgEl.textContent = "Invalid username or password. Access denied.";
                     errorMsgEl.style.display = "block";
@@ -221,7 +223,7 @@ async function discoverStartups() {
     `;
 
     try {
-        const res = await fetch(`${API_BASE}/discover`);
+        const res = await authFetch(`${API_BASE}/discover`);
         const data = await res.json();
         currentDiscoveredRegions = data.regions || { us_yc: [], eu: [], asia_me: [] };
         document.getElementById("metric-discovered").textContent = data.total || 0;
@@ -305,7 +307,7 @@ function renderStartupsForActiveRegion() {
 async function triggerOutreachForDomain(domain) {
     alert(`⚡ Starting LangGraph Agent Outreach Pipeline for: ${domain}`);
     try {
-        const res = await fetch(`${API_BASE}/outreach`, {
+        const res = await authFetch(`${API_BASE}/outreach`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ domain: domain })
@@ -502,7 +504,7 @@ async function triggerNightlyScan() {
     btn.disabled = true;
     btn.innerHTML = `<span class="btn-icon">🌀</span> Running Scan...`;
     try {
-        const res = await fetch(`${API_BASE}/nightly-scan`, { method: "POST" });
+        const res = await authFetch(`${API_BASE}/nightly-scan`, { method: "POST" });
         const data = await res.json();
         alert("🌙 Nightly Scan Started! The system is discovering startups, scanning active role postings, and generating pitches in the background.");
     } catch (err) {
@@ -520,7 +522,7 @@ async function runRoleSearch() {
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">🌀</div><h3>Searching ATS Portals...</h3><p>Scanning Greenhouse, Lever, and Ashby for "${query || 'AI Engineer'}"...</p></div>`;
 
     try {
-        const res = await fetch(`${API_BASE}/role-search`, {
+        const res = await authFetch(`${API_BASE}/role-search`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ role_query: query, limit: 10 })
