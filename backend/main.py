@@ -2,6 +2,9 @@ import os
 import time
 import json
 import urllib.parse
+import io
+import csv
+import uuid
 from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -17,7 +20,12 @@ from database import (
     delete_outreach_draft,
     save_company
 )
-from tools import discover_startups_by_region
+from tools import (
+    discover_startups_by_region,
+    enrich_companies_batch,
+    enrich_single_company,
+    resolve_company_domain
+)
 from graph import outreach_graph
 
 try:
@@ -304,6 +312,138 @@ def get_history(admin: dict = Depends(get_current_admin)):
     """Fetch all processed outreach history."""
     history = get_all_history()
     return {"history": history}
+
+ENRICHED_CSV_STORE: Dict[str, Dict[str, Any]] = {}
+
+@app.post("/api/enrich/csv")
+async def enrich_csv_leads(
+    file: UploadFile = File(...),
+    admin: dict = Depends(get_current_admin)
+):
+    """
+    Parses an uploaded CSV file, auto-detects company/domain columns,
+    and enriches decision-maker emails via Hunter.io, Apollo, GitHub, and AI waterfall.
+    """
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only .csv files are supported.")
+
+    raw_bytes = await file.read()
+    text = ""
+    for enc in ["utf-8-sig", "utf-8", "latin-1", "cp1252"]:
+        try:
+            text = raw_bytes.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+
+    if not text:
+        raise HTTPException(status_code=400, detail="Could not read or decode the CSV file.")
+
+    f = io.StringIO(text)
+    reader = csv.reader(f)
+    rows = [r for r in reader if any(field.strip() for field in r)]
+    if not rows:
+        raise HTTPException(status_code=400, detail="CSV file is empty.")
+
+    header = [h.strip() for h in rows[0]]
+    header_lower = [h.lower() for h in header]
+
+    company_col_idx = -1
+    domain_col_idx = -1
+
+    company_keywords = ["company", "company name", "company_name", "organization", "org", "business", "account", "startup"]
+    domain_keywords = ["domain", "website", "url", "web", "company domain", "company_domain", "site"]
+
+    for idx, col in enumerate(header_lower):
+        if company_col_idx == -1 and any(k == col or k in col for k in company_keywords):
+            company_col_idx = idx
+        if domain_col_idx == -1 and any(k == col or k in col for k in domain_keywords):
+            domain_col_idx = idx
+
+    has_header = company_col_idx != -1 or domain_col_idx != -1
+    if not has_header:
+        company_col_idx = 0
+        data_rows = rows
+    else:
+        if company_col_idx == -1 and domain_col_idx != -1:
+            company_col_idx = domain_col_idx
+        elif company_col_idx == -1:
+            company_col_idx = 0
+        data_rows = rows[1:]
+
+    companies_to_enrich = []
+    seen = set()
+    for r in data_rows[:60]:
+        if not r or len(r) <= company_col_idx:
+            continue
+        c_name = r[company_col_idx].strip()
+        c_dom = r[domain_col_idx].strip() if (domain_col_idx != -1 and len(r) > domain_col_idx) else ""
+        key = (c_name.lower(), c_dom.lower())
+        if (c_name or c_dom) and key not in seen:
+            seen.add(key)
+            companies_to_enrich.append({"company_name": c_name, "domain": c_dom})
+
+    if not companies_to_enrich:
+        raise HTTPException(status_code=400, detail="No valid companies found in the CSV.")
+
+    enriched_results = await enrich_companies_batch(companies_to_enrich)
+
+    output_io = io.StringIO()
+    writer = csv.writer(output_io)
+    writer.writerow([
+        "Company Name",
+        "Domain",
+        "Decision Maker",
+        "Job Title",
+        "Verified Email",
+        "Confidence Score",
+        "Data Source",
+        "Status"
+    ])
+    for item in enriched_results:
+        writer.writerow([
+            item.get("company_name", ""),
+            item.get("domain", ""),
+            item.get("lead_name", ""),
+            item.get("lead_title", ""),
+            item.get("lead_email", ""),
+            item.get("confidence", ""),
+            item.get("source", ""),
+            item.get("status", "")
+        ])
+
+    csv_data = output_io.getvalue()
+    download_id = f"enrich_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+    ENRICHED_CSV_STORE[download_id] = {
+        "csv_data": csv_data,
+        "filename": f"enriched_leads_{int(time.time())}.csv",
+        "created_at": time.time()
+    }
+
+    return {
+        "status": "SUCCESS",
+        "download_id": download_id,
+        "total": len(enriched_results),
+        "found_count": len([r for r in enriched_results if r.get("lead_email")]),
+        "results": enriched_results
+    }
+
+@app.get("/api/enrich/download/{download_id}")
+def download_enriched_csv(download_id: str):
+    """Downloads the generated enriched CSV file."""
+    record = ENRICHED_CSV_STORE.get(download_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Download file expired or not found.")
+    
+    from fastapi.responses import Response
+    return Response(
+        content=record["csv_data"],
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{record["filename"]}"'
+        }
+    )
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -32,6 +32,10 @@
                     <span class="icon">⚡</span>
                     <span>Career Site Autofill</span>
                 </button>
+                <button class="nav-item" data-tab="csv-enrich">
+                    <span class="icon">📁</span>
+                    <span>Batch CSV Enrichment</span>
+                </button>
                 <button class="nav-item" data-tab="pending">
                     <span class="icon">✋</span>
                     <span>HITL Approval Queue</span>
@@ -193,6 +197,95 @@
                     <div id="autofill-status-box" style="margin-top:20px; display:none; padding:16px; border-radius:10px; background:rgba(0,240,255,0.08); border:1px solid rgba(0,240,255,0.3);">
                         <h4 id="autofill-status-title" style="color:var(--primary-cyan); margin:0 0 6px 0;">Processing Application URL...</h4>
                         <p id="autofill-status-desc" style="color:var(--text-muted); margin:0; font-size:13px;"></p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View: Batch CSV Lead & Email Enrichment -->
+            <section class="tab-view" id="view-csv-enrich">
+                <div class="section-header">
+                    <h3>📁 Batch CSV Lead & Email Enrichment</h3>
+                    <p class="section-desc">Upload any CSV containing company names. AutoOutreach detects organizations, queries Hunter.io & Apollo, mines GitHub commit emails, and exports an enriched spreadsheet ready for cold outreach.</p>
+                </div>
+
+                <!-- CSV Upload Drag-and-Drop Card -->
+                <div class="csv-upload-container" style="background:rgba(255,255,255,0.03); border:2px dashed rgba(0, 240, 255, 0.35); border-radius:16px; padding:36px; text-align:center; transition:all 0.3s; margin-top:20px; cursor:pointer;" id="csv-dropzone">
+                    <div style="font-size:48px; margin-bottom:12px;">📑</div>
+                    <h4 style="color:#fff; font-size:18px; margin:0 0 8px 0; font-weight:700;">Drag & Drop Company CSV Here</h4>
+                    <p style="color:var(--text-muted); font-size:14px; margin:0 0 18px 0; max-width:540px; margin-left:auto; margin-right:auto;">
+                        Supports standard CSV files with headers like <code>Company</code>, <code>Organization</code>, or <code>Domain</code>. Unlabelled lists in Column 1 are also detected automatically.
+                    </p>
+                    <input type="file" id="csv-file-input" accept=".csv" style="display:none;">
+                    <div style="display:flex; justify-content:center; gap:12px; align-items:center;">
+                        <button class="btn btn-primary" type="button" onclick="document.getElementById('csv-file-input').click()">
+                            <span>📂 Choose CSV File</span>
+                        </button>
+                        <button class="btn" type="button" id="btn-load-sample-csv" style="background:rgba(255,255,255,0.05); color:var(--text-main); border:1px solid rgba(255,255,255,0.15);">
+                            <span>⚡ Load Demo Tech Startups</span>
+                        </button>
+                    </div>
+                    <div id="csv-file-badge" style="display:none; margin-top:16px; display:inline-flex; align-items:center; gap:8px; background:rgba(0,240,255,0.1); border:1px solid rgba(0,240,255,0.3); padding:8px 16px; border-radius:20px; font-size:13px; color:var(--primary-cyan);">
+                        <span>📄</span>
+                        <span id="csv-filename">companies.csv</span>
+                        <span id="csv-filesize" style="color:var(--text-muted); font-size:11px;">(12 KB)</span>
+                    </div>
+                </div>
+
+                <!-- Live Enrichment Progress Card -->
+                <div id="csv-progress-card" style="display:none; margin-top:20px; background:rgba(0,0,0,0.4); border:1px solid rgba(0,240,255,0.3); border-radius:14px; padding:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <div class="spinner" style="width:18px; height:18px; border:2px solid rgba(0,240,255,0.2); border-top-color:var(--primary-cyan); border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+                            <span id="csv-progress-status" style="font-weight:600; color:#fff; font-size:14px;">Enriching leads via Hunter.io & AI Waterfall...</span>
+                        </div>
+                        <span id="csv-progress-percent" style="color:var(--primary-cyan); font-weight:700; font-family:'JetBrains Mono', monospace;">0%</span>
+                    </div>
+                    <div style="width:100%; height:8px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden;">
+                        <div id="csv-progress-bar" style="width:0%; height:100%; background:linear-gradient(90deg, var(--primary-cyan), #a855f7); transition:width 0.3s;"></div>
+                    </div>
+                </div>
+
+                <!-- Enriched Results Section -->
+                <div id="csv-results-section" style="display:none; margin-top:24px;">
+                    <!-- Metrics Bar -->
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin-bottom:20px;">
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:12px; padding:16px;">
+                            <div style="color:var(--text-muted); font-size:12px; margin-bottom:4px;">COMPANIES PROCESSED</div>
+                            <div style="font-size:24px; font-weight:700; color:#fff;" id="csv-stat-total">0</div>
+                        </div>
+                        <div style="background:rgba(0,240,255,0.06); border:1px solid rgba(0,240,255,0.25); border-radius:12px; padding:16px;">
+                            <div style="color:var(--primary-cyan); font-size:12px; margin-bottom:4px;">DECISION MAKERS FOUND</div>
+                            <div style="font-size:24px; font-weight:700; color:var(--primary-cyan);" id="csv-stat-found">0</div>
+                        </div>
+                        <div style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.25); border-radius:12px; padding:16px;">
+                            <div style="color:#c084fc; font-size:12px; margin-bottom:4px;">MATCH RATE</div>
+                            <div style="font-size:24px; font-weight:700; color:#c084fc;" id="csv-stat-rate">100%</div>
+                        </div>
+                        <div style="display:flex; align-items:center; justify-content:center;">
+                            <button id="btn-download-enriched-csv" class="btn btn-primary" style="width:100%; height:100%; min-height:56px; font-size:15px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 0 20px rgba(0,240,255,0.3);">
+                                <span>📥 Download Enriched CSV</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Enriched Table Preview -->
+                    <div class="history-table-wrapper" style="border-radius:12px; border:1px solid rgba(255,255,255,0.08); background:rgba(0,0,0,0.3);">
+                        <table class="history-table" id="csv-enriched-table">
+                            <thead>
+                                <tr>
+                                    <th>Company</th>
+                                    <th>Domain</th>
+                                    <th>Decision Maker</th>
+                                    <th>Role / Title</th>
+                                    <th>Verified Email</th>
+                                    <th>Verification Source</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="csv-enriched-tbody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>

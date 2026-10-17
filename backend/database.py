@@ -1,7 +1,11 @@
 import sqlite3
 import os
 import json
-import redis
+try:
+    import redis
+except ImportError:
+    redis = None
+
 from typing import Optional, Dict, Any, List
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "outreach_cache.db")
@@ -11,13 +15,17 @@ REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 
 # Initialize Redis L2 Cache Client
-try:
-    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
-    redis_client.ping()
-    print(f"[Redis L2 Cache] Connected successfully to {REDIS_HOST}:{REDIS_PORT}")
-except Exception as e:
+if redis:
+    try:
+        redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
+        redis_client.ping()
+        print(f"[Redis L2 Cache] Connected successfully to {REDIS_HOST}:{REDIS_PORT}")
+    except Exception as e:
+        redis_client = None
+        print(f"[Redis L2 Cache] Warning: Redis unavailable ({e}). Falling back to L3 SQLite.")
+else:
     redis_client = None
-    print(f"[Redis L2 Cache] Warning: Redis unavailable ({e}). Falling back to L3 SQLite.")
+
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)

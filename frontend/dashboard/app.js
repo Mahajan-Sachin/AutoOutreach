@@ -68,6 +68,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     initNavigation();
     initEventListeners();
     initAuthListeners();
+    initCsvEnrichListeners();
     
     const isAuthenticated = await verifyAuthSession();
     if (isAuthenticated) {
@@ -77,6 +78,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         discoverStartups();
     }
 });
+
 
 function initAuthListeners() {
     const loginForm = document.getElementById("auth-login-form");
@@ -163,6 +165,9 @@ function initNavigation() {
             } else if (tab === "autofill") {
                 document.getElementById("page-title").textContent = "Career Site Form Auto-Filler";
                 document.getElementById("page-subtitle").textContent = "Auto-fill Greenhouse, Lever, and Ashby job applications with AI custom essay answers";
+            } else if (tab === "csv-enrich") {
+                document.getElementById("page-title").textContent = "Batch CSV Lead & Email Enrichment";
+                document.getElementById("page-subtitle").textContent = "Auto-detect organizations, query Hunter.io & Apollo, and export enriched CSVs";
             } else if (tab === "pending") {
                 document.getElementById("page-title").textContent = "HITL Approval Queue";
                 document.getElementById("page-subtitle").textContent = "Review tailored pitch emails before sending";
@@ -651,3 +656,236 @@ function escapeHtml(str) {
     if (!str) return "";
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
+
+let currentEnrichedDownloadId = null;
+
+function initCsvEnrichListeners() {
+    const dropzone = document.getElementById("csv-dropzone");
+    const fileInput = document.getElementById("csv-file-input");
+    const demoBtn = document.getElementById("btn-load-sample-csv");
+    const downloadBtn = document.getElementById("btn-download-enriched-csv");
+
+    if (dropzone && fileInput) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => {
+                dropzone.style.borderColor = "var(--primary-cyan)";
+                dropzone.style.background = "rgba(0, 240, 255, 0.08)";
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => {
+                dropzone.style.borderColor = "rgba(0, 240, 255, 0.35)";
+                dropzone.style.background = "rgba(255, 255, 255, 0.03)";
+            }, false);
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files && files.length > 0) {
+                processCsvFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener("change", (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                processCsvFile(e.target.files[0]);
+            }
+        });
+    }
+
+    if (demoBtn) {
+        demoBtn.addEventListener("click", () => {
+            const sampleContent = "Company Name,Domain\nStripe,stripe.com\nScale AI,scale.com\nMistral AI,mistral.ai\nElevenLabs,elevenlabs.io\nPostman,postman.com\nCursor,cursor.com\n";
+            const sampleBlob = new Blob([sampleContent], { type: "text/csv" });
+            const sampleFile = new File([sampleBlob], "tech_startups_demo.csv", { type: "text/csv" });
+            processCsvFile(sampleFile);
+        });
+    }
+
+    if (downloadBtn) {
+        downloadBtn.addEventListener("click", () => {
+            if (currentEnrichedDownloadId) {
+                window.location.href = `${API_BASE}/enrich/download/${currentEnrichedDownloadId}`;
+            } else {
+                alert("Please upload and enrich a CSV first.");
+            }
+        });
+    }
+}
+
+async function processCsvFile(file) {
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+        alert("Please select a valid .csv file.");
+        return;
+    }
+
+    const badge = document.getElementById("csv-file-badge");
+    const filenameEl = document.getElementById("csv-filename");
+    const filesizeEl = document.getElementById("csv-filesize");
+    const progressCard = document.getElementById("csv-progress-card");
+    const progressBar = document.getElementById("csv-progress-bar");
+    const progressStatus = document.getElementById("csv-progress-status");
+    const progressPercent = document.getElementById("csv-progress-percent");
+    const resultsSection = document.getElementById("csv-results-section");
+
+    if (badge && filenameEl) {
+        badge.style.display = "inline-flex";
+        filenameEl.textContent = file.name;
+        if (filesizeEl) filesizeEl.textContent = `(${Math.max(1, Math.round(file.size / 1024))} KB)`;
+    }
+
+    if (resultsSection) resultsSection.style.display = "none";
+    if (progressCard) {
+        progressCard.style.display = "block";
+        progressBar.style.width = "15%";
+        progressPercent.textContent = "15%";
+        progressStatus.textContent = "Parsing CSV and auto-detecting company columns...";
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    let progressTimer = setInterval(() => {
+        let cur = parseInt(progressBar.style.width) || 15;
+        if (cur < 85) {
+            cur += 15;
+            progressBar.style.width = cur + "%";
+            progressPercent.textContent = cur + "%";
+            if (cur >= 30 && cur < 60) {
+                progressStatus.textContent = "Resolving domains & querying Hunter.io API...";
+            } else if (cur >= 60) {
+                progressStatus.textContent = "Extracting verified decision makers & GitHub commits...";
+            }
+        }
+    }, 600);
+
+    try {
+        const res = await authFetch(`${API_BASE}/enrich/csv`, {
+            method: "POST",
+            body: formData
+        });
+
+        clearInterval(progressTimer);
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || "Enrichment request failed.");
+        }
+
+        const data = await res.json();
+        progressBar.style.width = "100%";
+        progressPercent.textContent = "100%";
+        progressStatus.textContent = "Enrichment Complete!";
+
+        setTimeout(() => {
+            if (progressCard) progressCard.style.display = "none";
+            renderCsvEnrichedResults(data);
+        }, 500);
+
+    } catch (err) {
+        clearInterval(progressTimer);
+        console.error("CSV enrichment error:", err);
+        if (progressCard) progressCard.style.display = "none";
+        alert(`Failed to enrich CSV: ${err.message}`);
+    }
+}
+
+function renderCsvEnrichedResults(data) {
+    const resultsSection = document.getElementById("csv-results-section");
+    const statTotal = document.getElementById("csv-stat-total");
+    const statFound = document.getElementById("csv-stat-found");
+    const statRate = document.getElementById("csv-stat-rate");
+    const tbody = document.getElementById("csv-enriched-tbody");
+
+    currentEnrichedDownloadId = data.download_id;
+
+    if (statTotal) statTotal.textContent = data.total || 0;
+    if (statFound) statFound.textContent = data.found_count || 0;
+    if (statRate) {
+        const rate = data.total > 0 ? Math.round((data.found_count / data.total) * 100) : 0;
+        statRate.textContent = `${rate}%`;
+    }
+
+    if (tbody) {
+        tbody.innerHTML = "";
+        const results = data.results || [];
+        results.forEach(row => {
+            const tr = document.createElement("tr");
+
+            let badgeStyle = "background:rgba(255,255,255,0.06); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1);";
+            const src = row.source || "";
+            if (src.includes("Hunter")) {
+                badgeStyle = "background:rgba(0, 240, 255, 0.12); color:var(--primary-cyan); border:1px solid rgba(0, 240, 255, 0.3);";
+            } else if (src.includes("Apollo")) {
+                badgeStyle = "background:rgba(168, 85, 247, 0.12); color:#c084fc; border:1px solid rgba(168, 85, 247, 0.3);";
+            } else if (src.includes("GitHub")) {
+                badgeStyle = "background:rgba(0, 255, 136, 0.12); color:#00ff88; border:1px solid rgba(0, 255, 136, 0.3);";
+            }
+
+            tr.innerHTML = `
+                <td style="font-weight:600; color:#fff;">${escapeHtml(row.company_name)}</td>
+                <td><a href="https://${escapeHtml(row.domain)}" target="_blank" style="color:var(--primary-cyan); text-decoration:none;">${escapeHtml(row.domain)} ↗</a></td>
+                <td style="font-weight:500;">${escapeHtml(row.lead_name)}</td>
+                <td style="color:var(--text-muted); font-size:13px;">${escapeHtml(row.lead_title)}</td>
+                <td>
+                    <span style="font-family:'JetBrains Mono', monospace; font-size:13px; color:#fff; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:6px;">
+                        ${escapeHtml(row.lead_email)}
+                    </span>
+                </td>
+                <td>
+                    <span style="display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; ${badgeStyle}">
+                        ${escapeHtml(row.confidence || row.source)}
+                    </span>
+                </td>
+                <td>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="copyToClipboard('${escapeHtml(row.lead_email)}', this)">
+                            📋 Copy
+                        </button>
+                        <button class="btn btn-primary" style="padding:5px 10px; font-size:12px;" onclick="triggerQuickOutreach('${escapeHtml(row.domain)}', '${escapeHtml(row.company_name)}')">
+                            ⚡ Pitch
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    if (resultsSection) {
+        resultsSection.style.display = "block";
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function copyToClipboard(text, btnEl) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        const origText = btnEl.textContent;
+        btnEl.textContent = "✅ Copied";
+        setTimeout(() => { btnEl.textContent = origText; }, 1500);
+    }).catch(err => {
+        console.warn("Clipboard error:", err);
+    });
+}
+
+function triggerQuickOutreach(domain, companyName) {
+    const input = document.getElementById("manual-domain-input");
+    if (input) input.value = domain;
+    
+    const discoverNav = document.querySelector('.nav-item[data-tab="discover"]');
+    if (discoverNav) discoverNav.click();
+    
+    const manualBtn = document.getElementById("btn-manual-outreach");
+    if (manualBtn) manualBtn.click();
+}
+
