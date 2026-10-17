@@ -188,10 +188,19 @@ def process_outreach(req: OutreachRequest, background_tasks: BackgroundTasks, ad
     # 1. Enforce Redis Rate Limit (10 requests per 60s window)
     check_rate_limit(client_id="outreach_api", limit=10, window_seconds=60)
     clean_domain = (req.domain or "").lower().replace("https://", "").replace("http://", "").split("/")[0].replace("www.", "")
-    if not clean_domain and req.company_name:
-        clean_domain = req.company_name.lower().replace(" ", "") + ".com"
+    
+    # Strip YC tags, parentheses, and subtitle noise (e.g. 'OpenHack (YC F26)' -> 'OpenHack')
+    import re
+    clean_company = re.sub(r'\s*\([^\)]*\)', '', req.company_name or '').strip()
+    clean_company = re.sub(r'[\·\|\-].*$', '', clean_company).strip()
+
+    if not clean_domain and clean_company:
+        clean_domain = resolve_company_domain(clean_company)
+    elif not clean_domain:
+        clean_domain = "company.com"
         
-    company_name = req.company_name or clean_domain.split(".")[0].capitalize()
+    company_name = clean_company or clean_domain.split(".")[0].capitalize()
+
     
     # O(1) Cache Check for company mode (unless force_refresh is requested)
     if req.mode != "person" and not req.force_refresh:

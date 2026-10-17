@@ -391,7 +391,10 @@ def resolve_company_domain(company_name: str) -> str:
     If company name already looks like a domain (e.g. acme.ai), normalizes it.
     Otherwise queries Groq AI or falls back to heuristic.
     """
-    cleaned = (company_name or "").strip().lower()
+    comp_clean = re.sub(r'\s*\([^\)]*\)', '', company_name or '').strip()
+    comp_clean = re.sub(r'[\·\|\-].*$', '', comp_clean).strip()
+
+    cleaned = (comp_clean or "").strip().lower()
     cleaned = cleaned.replace("https://", "").replace("http://", "").replace("www.", "").split("/")[0]
     if "." in cleaned and not cleaned.endswith("."):
         return cleaned
@@ -405,8 +408,9 @@ def resolve_company_domain(company_name: str) -> str:
                 model="qwen/qwen3.8-27b",
                 messages=[{
                     "role": "user",
-                    "content": f"Output ONLY the official web domain for the company '{company_name}'. Example: for 'Stripe' output 'stripe.com'. For 'Scale AI' output 'scale.com'. No markdown, no punctuation, domain only."
+                    "content": f"Output ONLY the official web domain for company '{comp_clean}'. Example: for 'Stripe' output 'stripe.com'. For 'Scale AI' output 'scale.com'. For 'OpenHack' output 'openhack.com'. Domain only, no markdown."
                 }],
+                max_tokens=25,
                 temperature=0.0
             )
             raw = res.choices[0].message.content.strip().lower()
@@ -414,11 +418,12 @@ def resolve_company_domain(company_name: str) -> str:
             if "." in raw and " " not in raw:
                 return raw
         except Exception as e:
-            print(f"[Tools] Domain resolution error for '{company_name}': {e}")
+            print(f"[Tools] Domain resolution error for '{comp_clean}': {e}")
 
     # Fallback heuristic
-    slug = re.sub(r'[^a-zA-Z0-9]', '', company_name).lower()
+    slug = re.sub(r'[^a-zA-Z0-9]', '', comp_clean).lower()
     return f"{slug}.com" if slug else "company.com"
+
 
 def enrich_single_company(company_name: str, domain: Optional[str] = None) -> Dict[str, Any]:
     """

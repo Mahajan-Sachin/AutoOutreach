@@ -57,18 +57,28 @@
           const fullText = result.person_title || cleanTitle;
           if (fullText.includes("@")) {
             const comp = fullText.split("@")[1].trim().split("-")[0].split("|")[0].split("·")[0].trim();
-            if (comp) result.company_name = comp;
+            if (comp) result.company_name = cleanCompanyTag(comp);
           } else if (fullText.toLowerCase().includes(" at ")) {
             const comp = fullText.split(/ at /i)[1].trim().split("-")[0].split("|")[0].split("·")[0].trim();
-            if (comp) result.company_name = comp;
+            if (comp) result.company_name = cleanCompanyTag(comp);
           }
+        }
+
+        function cleanCompanyTag(str) {
+          if (!str) return "";
+          return str.replace(/\(YC\s*[^\)]*\)/gi, "")
+                    .replace(/\([^\)]*\)/g, "")
+                    .replace(/·.*$/, "")
+                    .replace(/\|.*$/, "")
+                    .replace(/-.*$/, "")
+                    .trim();
         }
 
         if (!result.company_name && result.person_title) {
           if (result.person_title.includes("@")) {
-            result.company_name = result.person_title.split("@")[1].trim().split("-")[0].split("|")[0].split("·")[0].trim();
+            result.company_name = cleanCompanyTag(result.person_title.split("@")[1].trim().split("-")[0].split("|")[0].split("·")[0].trim());
           } else if (result.person_title.toLowerCase().includes(" at ")) {
-            result.company_name = result.person_title.split(/ at /i)[1].trim().split("-")[0].split("|")[0].split("·")[0].trim();
+            result.company_name = cleanCompanyTag(result.person_title.split(/ at /i)[1].trim().split("-")[0].split("|")[0].split("·")[0].trim());
           }
         }
 
@@ -77,9 +87,10 @@
                          topCard.querySelector('span[aria-label*="Current company"]') ||
                          topCard.querySelector('a[href*="/company/"]');
           if (compEl && compEl.innerText) {
-            result.company_name = compEl.innerText.split('\n')[0].split('·')[0].trim();
+            result.company_name = cleanCompanyTag(compEl.innerText.split('\n')[0].split('·')[0].trim());
           }
         }
+
 
         const externalLink = document.querySelector('a.pv-contact-info__contact-link[href*="http"]:not([href*="linkedin.com"])');
         if (externalLink && externalLink.href) {
