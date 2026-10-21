@@ -16,7 +16,7 @@ Key Highlights & Proof of Work:
    - Podman (Red Hat Go): Merged PR #29375 fixing Quadlet container storage auto-recovery logic in Go.
    - pandas (NumFOCUS): Merged PR #65413 fixing Categorical.map missing-key handling in pandas 3.1.
 2. Live Shippable Projects & Systems:
-   - Lead Intelligence & Executive Outreach Engine (JobFit AI): Production cross-browser extension (Chrome & Edge) and FastAPI/LangGraph multi-agent backend executing domain scraping, Hunter.io/Groq executive email discovery, and 5-bullet high-conversion cold pitches.
+   - Lead Intelligence & Executive Outreach Engine (AutoOutreach): Production cross-browser extension (Chrome & Edge) and FastAPI/LangGraph multi-agent backend executing domain scraping, Hunter.io/Groq executive email discovery, and 5-bullet high-conversion cold pitches.
    - Uncensored-Llama-1B (Weight Ablation & SFT): Fine-tuned Llama-3.2-1B with QLoRA on consumer hardware (4GB VRAM constraint) using Unsloth & Ablate Framework.
    - Phishing URL Detection: XGBoost model (58 features, 91.38% accuracy, 0.97 ROC-AUC) containerized with Docker, GitHub Actions CI/CD, and live Streamlit deployment.
 3. Tech Stack: Python, C++, Golang, Data Structures & Algorithms, LangGraph, CrewAI, Groq API, ChromaDB, FastAPI, PostgreSQL, Docker, GitHub Actions CI/CD.

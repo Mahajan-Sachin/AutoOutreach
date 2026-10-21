@@ -1,4 +1,4 @@
-# 🚀 JobFit AI: Autonomous Lead Intelligence & Executive Outreach Engine
+# 🚀 AutoOutreach: AI Venture & Founder Outreach
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Agentic_AI-FF6F00?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)

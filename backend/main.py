@@ -39,7 +39,7 @@ except ImportError:
     from rate_limiter import check_rate_limit
 
 app = FastAPI(
-    title="Autonomous Startup Discovery & Cold Outreach Platform",
+    title="AutoOutreach: AI Venture & Founder Outreach",
     version="1.0.0"
 )
 
